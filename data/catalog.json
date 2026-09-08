@@ -1,0 +1,445 @@
+{
+  "timeframes": [
+    "1D",
+    "4H",
+    "1H"
+  ],
+  "symbols": [
+    {
+      "id": "BTC",
+      "name": "BTC · 比特币",
+      "market": "加密",
+      "symbol": "BTC/USD",
+      "timeframes": [
+        "1D",
+        "4H",
+        "1H"
+      ],
+      "bars": {
+        "1D": 3297,
+        "4H": 19754,
+        "1H": 78956
+      },
+      "bytes": 5581881
+    },
+    {
+      "id": "ETH",
+      "name": "ETH · 以太坊",
+      "market": "加密",
+      "symbol": "ETH/USD",
+      "timeframes": [
+        "1D",
+        "4H",
+        "1H"
+      ],
+      "bars": {
+        "1D": 3297,
+        "4H": 19754,
+        "1H": 78956
+      },
+      "bytes": 5244404
+    },
+    {
+      "id": "SOL",
+      "name": "SOL · Solana",
+      "market": "加密",
+      "symbol": "SOL Solana",
+      "timeframes": [
+        "1D",
+        "4H",
+        "1H"
+      ],
+      "bars": {
+        "1D": 2205,
+        "4H": 13232,
+        "1H": 52907
+      },
+      "bytes": 3316325
+    },
+    {
+      "id": "PEPE",
+      "name": "PEPE · Pepe",
+      "market": "加密",
+      "symbol": "PEPE Pepe",
+      "timeframes": [
+        "1D",
+        "4H",
+        "1H"
+      ],
+      "bars": {
+        "1D": 1208,
+        "4H": 7247,
+        "1H": 28987
+      },
+      "bytes": 2419432
+    },
+    {
+      "id": "HYPE",
+      "name": "HYPE · Hyperliquid",
+      "market": "加密",
+      "symbol": "HYPE Hyperliquid",
+      "timeframes": [
+        "1D",
+        "4H",
+        "1H"
+      ],
+      "bars": {
+        "1D": 628,
+        "4H": 3769,
+        "1H": 5002
+      },
+      "bytes": 473669
+    },
+    {
+      "id": "XAUUSD",
+      "name": "XAUUSD · 现货黄金",
+      "market": "贵金属",
+      "symbol": "XAUUSD 现货黄金",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 8254
+      },
+      "bytes": 431127
+    },
+    {
+      "id": "XAGUSD",
+      "name": "XAGUSD · 现货白银",
+      "market": "贵金属",
+      "symbol": "XAGUSD 现货白银",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 7981
+      },
+      "bytes": 368874
+    },
+    {
+      "id": "AAPL",
+      "name": "AAPL · 苹果",
+      "market": "美股",
+      "symbol": "AAPL 苹果",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 11515
+      },
+      "bytes": 1157180
+    },
+    {
+      "id": "MSFT",
+      "name": "MSFT · 微软",
+      "market": "美股",
+      "symbol": "MSFT 微软",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 10189
+      },
+      "bytes": 1000572
+    },
+    {
+      "id": "NVDA",
+      "name": "NVDA · 英伟达",
+      "market": "美股",
+      "symbol": "NVDA 英伟达",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 6938
+      },
+      "bytes": 702782
+    },
+    {
+      "id": "GOOGL",
+      "name": "GOOGL · 谷歌",
+      "market": "美股",
+      "symbol": "GOOGL 谷歌",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 5537
+      },
+      "bytes": 543183
+    },
+    {
+      "id": "META",
+      "name": "META · Meta",
+      "market": "美股",
+      "symbol": "META Meta",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 3585
+      },
+      "bytes": 348683
+    },
+    {
+      "id": "TSLA",
+      "name": "TSLA · 特斯拉",
+      "market": "美股",
+      "symbol": "TSLA 特斯拉",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 4062
+      },
+      "bytes": 392745
+    },
+    {
+      "id": "AMZN",
+      "name": "AMZN · 亚马逊",
+      "market": "美股",
+      "symbol": "AMZN 亚马逊",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 7363
+      },
+      "bytes": 707221
+    },
+    {
+      "id": "BRK_B",
+      "name": "BRK.B · 伯克希尔",
+      "market": "美股",
+      "symbol": "BRK.B 伯克希尔",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 7620
+      },
+      "bytes": 695785
+    },
+    {
+      "id": "JPM",
+      "name": "JPM · 摩根大通",
+      "market": "美股",
+      "symbol": "JPM 摩根大通",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 11703
+      },
+      "bytes": 1129558
+    },
+    {
+      "id": "PLTR",
+      "name": "PLTR · Palantir",
+      "market": "美股",
+      "symbol": "PLTR Palantir",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 1481
+      },
+      "bytes": 140762
+    },
+    {
+      "id": "COIN",
+      "name": "COIN · Coinbase",
+      "market": "美股",
+      "symbol": "COIN Coinbase",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 1347
+      },
+      "bytes": 123355
+    },
+    {
+      "id": "AVGO",
+      "name": "AVGO · 博通",
+      "market": "美股",
+      "symbol": "AVGO 博通",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 4288
+      },
+      "bytes": 418768
+    },
+    {
+      "id": "MU",
+      "name": "MU · 美光",
+      "market": "美股",
+      "symbol": "MU 美光",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 10639
+      },
+      "bytes": 1030430
+    },
+    {
+      "id": "WMT",
+      "name": "WMT · 沃尔玛",
+      "market": "美股",
+      "symbol": "WMT 沃尔玛",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 13610
+      },
+      "bytes": 1351587
+    },
+    {
+      "id": "AMD",
+      "name": "AMD · 超威半导体",
+      "market": "美股",
+      "symbol": "AMD 超威半导体",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 11704
+      },
+      "bytes": 881033
+    },
+    {
+      "id": "NFLX",
+      "name": "NFLX · 奈飞",
+      "market": "美股",
+      "symbol": "NFLX 奈飞",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 6102
+      },
+      "bytes": 600829
+    },
+    {
+      "id": "0700_HK",
+      "name": "0700.HK · 腾讯",
+      "market": "港股",
+      "symbol": "0700.HK 腾讯",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 5452
+      },
+      "bytes": 530278
+    },
+    {
+      "id": "9988_HK",
+      "name": "9988.HK · 阿里巴巴",
+      "market": "港股",
+      "symbol": "9988.HK 阿里巴巴",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 1631
+      },
+      "bytes": 158607
+    },
+    {
+      "id": "600519_SS",
+      "name": "600519.SS · 贵州茅台",
+      "market": "A股",
+      "symbol": "600519.SS 贵州茅台",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 6124
+      },
+      "bytes": 588653
+    },
+    {
+      "id": "002460_SZ",
+      "name": "002460.SZ · 赣锋锂业",
+      "market": "A股",
+      "symbol": "002460.SZ 赣锋锂业",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 3893
+      },
+      "bytes": 378717
+    },
+    {
+      "id": "300750_SZ",
+      "name": "300750.SZ · 宁德时代",
+      "market": "A股",
+      "symbol": "300750.SZ 宁德时代",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 1990
+      },
+      "bytes": 194220
+    },
+    {
+      "id": "600900_SS",
+      "name": "600900.SS · 长江电力",
+      "market": "A股",
+      "symbol": "600900.SS 长江电力",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 5569
+      },
+      "bytes": 539347
+    },
+    {
+      "id": "000333_SZ",
+      "name": "000333.SZ · 美的集团",
+      "market": "A股",
+      "symbol": "000333.SZ 美的集团",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 3140
+      },
+      "bytes": 303741
+    },
+    {
+      "id": "603259_SS",
+      "name": "603259.SS · 药明康德",
+      "market": "A股",
+      "symbol": "603259.SS 药明康德",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 2014
+      },
+      "bytes": 194256
+    },
+    {
+      "id": "300033_SZ",
+      "name": "300033.SZ · 同花顺",
+      "market": "A股",
+      "symbol": "300033.SZ 同花顺",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 4045
+      },
+      "bytes": 389323
+    }
+  ]
+}

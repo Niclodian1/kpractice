@@ -1,0 +1,373 @@
+"use strict";
+
+const curModeKey = () => (TR.active && !TR.revealed) ? 'trainer' : 'replay';
+const acctBal = () => {
+  const a = acctLoad(), m = curModeKey();
+  return typeof a[m] === 'number' ? a[m] : INIT_CAPITAL;
+};
+const acctAdj = d => {
+  const a = acctLoad(), m = curModeKey();
+  const base = typeof a[m] === 'number' ? a[m] : INIT_CAPITAL;
+  a[m] = +(base + d).toFixed(6);
+  acctSave(a);
+  persistFlush();
+};
+const acctReset = () => { const a = acctLoad(); a[curModeKey()] = INIT_CAPITAL; acctSave(a); persistFlush(); };
+
+let positions = [];
+let posSeq = 1;
+const posById = id => positions.find(p => p.id === id);
+const posLayoutOk = pos => (pos.sym === currentSym) && pos.tf === activeTF;
+
+function curBar(){
+  const cs = candlesFor();
+  return cs.length ? cs[cs.length - 1] : null;
+}
+const posCapital = pos => pos.entries.reduce((a, e) => a + e.capital, 0);
+function posAvgEntry(pos){
+  const nv = pos.entries.reduce((a, e) => a + e.price * e.capital * e.leverage, 0);
+  const dn = pos.entries.reduce((a, e) => a + e.capital * e.leverage, 0);
+  return dn ? nv / dn : 0;
+}
+function pnlOf(pos, price){
+  const dir = pos.side === '多' ? 1 : -1;
+  return pos.entries.reduce((a, e) => a + (price - e.price) / e.price * dir * e.leverage * e.capital, 0);
+}
+function posValue(pos, price){
+  return pos.entries.reduce((a, e) => a + e.capital * e.leverage / e.price, 0) * price;
+}
+function addBudget(pos){
+  if (!pos) return { u:0, used:0, avail:0 };
+  const bar = curBar();
+  const u = bar ? pnlOf(pos, bar.close) : 0;
+  const used = pos.entries.slice(1).reduce((a, e) => a + e.capital, 0);
+  return { u, used, avail: Math.max(0, u - used) };
+}
+const acctEquity = () => {
+  const bar = curBar();
+  const cur = positions.filter(p => posLayoutOk(p));
+  const used = cur.reduce((a, p) => a + posCapital(p), 0);
+  const floatPnl = bar ? cur.reduce((a, p) => a + pnlOf(p, bar.close), 0) : 0;
+  return acctBal() + used + floatPnl;
+};
+
+const POS_COLORS = ['#f5a623', '#4a90d9', '#b45cd6', '#2fbf8f', '#e05c78', '#8a9299'];
+const posColor = pos => POS_COLORS[(pos.id - 1) % POS_COLORS.length];
+const posColorById = pid => POS_COLORS[(pid - 1) % POS_COLORS.length];
+let posPriceLines = [];
+
+function practiceEntries(){
+  const out = [];
+  for (const pos of positions){
+    pos.entries.forEach((e, i) => out.push({
+      time: e.t, price: e.price, side: pos.side, isAdd: i > 0, pid: pos.id, color: posColor(pos),
+    }));
+  }
+  for (const r of TR.session){
+    const live = positions.find(p => p.id === r.pid);
+    if (!live){
+      (r.entry_ts_list || []).forEach((t0, i) => out.push({
+        time: t0, price: (r.entry_prices || [])[i] ?? r.entry, side: r.side, isAdd: i > 0,
+        pid: r.pid, color: posColorById(r.pid), closed: true,
+      }));
+    }
+    if (r.exit_ts != null) out.push({
+      time: r.exit_ts, price: r.exit_price, side: r.side, isExit: true, pid: r.pid,
+      color: r.pnl_u >= 0 ? t().up : t().down,
+    });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+const fmtLogic = (s, n=16) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
+
+function renderJournal(){
+  const box = document.getElementById('jPositions');
+  if (!box) return;
+  document.getElementById('journalMode').textContent =
+    inReplay() ? `· ${activeTF} @ ${fmtTime(replayT)}` : '';
+  document.getElementById('jOpen').disabled = !inReplay();
+  const bar = curBar();
+  let html = '';
+  const floatSum = bar ? positions.filter(p => posLayoutOk(p)).reduce((a, p) => a + pnlOf(p, bar.close), 0) : 0;
+  const used = positions.filter(p => posLayoutOk(p)).reduce((a, p) => a + posCapital(p), 0);
+  const eq = acctBal() + used + floatSum;
+  const eqCol = eq > INIT_CAPITAL ? 'var(--up)' : (eq < INIT_CAPITAL ? 'var(--down)' : 'var(--ink-2)');
+  html += `<div data-acct style="border:1px dashed var(--border);border-radius:8px;padding:8px;margin-top:6px;font-size:12px;">
+    可用 <b data-abal>${acctBal().toFixed(2)}U</b> · 占用 <span data-aused>${used.toFixed(0)}</span>U<br>
+    浮动 <span data-fsum style="font-weight:700;color:${floatSum >= 0 ? 'var(--up)' : 'var(--down)'}">${floatSum >= 0 ? '+' : ''}${floatSum.toFixed(2)}U</span>
+    · 净值 <b data-aeq style="color:${eqCol}">${eq.toFixed(2)}U</b>
+  </div>`;
+  for (const pos of positions){
+    const ok = posLayoutOk(pos);
+    const cap = posCapital(pos);
+    const u = ok && bar ? pnlOf(pos, bar.close) : 0;
+    const pct = cap ? u / cap * 100 : 0;
+    const col = u >= 0 ? 'var(--up)' : 'var(--down)';
+    const pv = ok && bar ? posValue(pos, bar.close) : cap;
+    const lastLev = pos.entries[pos.entries.length - 1].leverage;
+    html += `<div class="pos-card" data-pid="${pos.id}">
+      <b>#${pos.id} ${pos.side}</b> · ${pos.entries.length}笔 · 均价 ${fmt(posAvgEntry(pos))} · 止损 ${pos.stop ?? '—'}<br>
+      <span style="opacity:.85">持仓金额 ${pv.toFixed(1)} U</span><br>
+      <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
+      ${pos.entries.map((e, i) =>
+        `<span style="opacity:.72">${i + 1}) ${e.price} · ${e.leverage}x · ${e.capital}U · ${fmtLogic(e.logic)}</span>`
+      ).join('<br>')}
+      <div class="row-btns" style="margin-top:8px;">
+        <button class="btn" data-act="add-toggle" data-pid="${pos.id}" type="button">加仓</button>
+        <button class="btn" data-act="close-toggle" data-pid="${pos.id}" type="button">平仓</button>
+      </div>
+      <div class="sec-add" style="display:none;flex-direction:column;gap:6px;margin-top:6px;">
+        <div data-budget="${pos.id}" style="font-size:11px;opacity:.8;"></div>
+        <label>本金U(≤浮盈)<input type="number" class="inp-add-cap" inputmode="decimal" min="0" step="0.01"></label>
+        <label>杠杆<input type="number" class="inp-add-lev" inputmode="numeric" value="${lastLev}" min="1" max="125"></label>
+        <label>加仓价<input type="number" class="inp-add-price" inputmode="decimal" placeholder="当前收盘"></label>
+        <label>止损（空=不变）<input type="number" class="inp-add-stop" inputmode="decimal"></label>
+        <label>加仓逻辑（必填）<textarea class="inp-add-logic" rows="2"></textarea></label>
+        <button class="btn primary" data-act="add-ok" data-pid="${pos.id}" type="button">确认加仓</button>
+      </div>
+      <div class="sec-exit" style="display:none;flex-direction:column;gap:6px;margin-top:6px;">
+        <label>平仓比例%<input type="number" class="inp-exit-ratio" inputmode="numeric" value="100" min="1" max="100"></label>
+        <label>平仓逻辑（必填）<textarea class="inp-exit-logic" rows="2"></textarea></label>
+        <button class="btn primary" data-act="close-ok" data-pid="${pos.id}" type="button">确认平仓</button>
+      </div>
+    </div>`;
+  }
+  if (!positions.length){
+    html += `<p class="hint" style="margin-top:8px;">暂无持仓。可同时开多笔不同方向。</p>`;
+  }
+  box.innerHTML = html;
+  refreshPositionLines();
+}
+
+function updateLivePnl(){
+  const jm = document.getElementById('journalMode');
+  if (jm) jm.textContent = inReplay() ? `· ${activeTF} @ ${fmtTime(replayT)}` : '';
+  const bar = curBar();
+  if (!bar) return;
+  const balEl = document.querySelector('[data-abal]');
+  if (balEl){
+    const mine = positions.filter(p => posLayoutOk(p));
+    const floatSum = mine.reduce((a, p) => a + pnlOf(p, bar.close), 0);
+    const used = mine.reduce((a, p) => a + posCapital(p), 0);
+    const eq = acctBal() + used + floatSum;
+    const fsEl = document.querySelector('[data-fsum]');
+    const eqEl = document.querySelector('[data-aeq]');
+    const usEl = document.querySelector('[data-aused]');
+    balEl.textContent = acctBal().toFixed(2) + 'U';
+    if (usEl) usEl.textContent = used.toFixed(0);
+    if (fsEl){
+      fsEl.textContent = (floatSum >= 0 ? '+' : '') + floatSum.toFixed(2) + 'U';
+      fsEl.style.color = floatSum >= 0 ? 'var(--up)' : 'var(--down)';
+    }
+    if (eqEl){
+      eqEl.textContent = eq.toFixed(2) + 'U';
+      eqEl.style.color = eq > INIT_CAPITAL ? 'var(--up)' : (eq < INIT_CAPITAL ? 'var(--down)' : '');
+    }
+  }
+  for (const pos of positions){
+    if (!posLayoutOk(pos)) continue;
+    const u = pnlOf(pos, bar.close);
+    const cap = posCapital(pos);
+    const f = document.querySelector(`[data-float="${pos.id}"]`);
+    if (f){
+      f.textContent = `浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${cap ? (u / cap * 100 >= 0 ? '+' : '') + (u / cap * 100).toFixed(1) : '0.0'}%)`;
+      f.style.color = u >= 0 ? 'var(--up)' : 'var(--down)';
+    }
+    const bd = document.querySelector(`[data-budget="${pos.id}"]`);
+    if (bd){
+      const b = addBudget(pos);
+      bd.innerHTML = `浮盈 <b style="color:${b.u >= 0 ? 'var(--up)' : 'var(--down)'}">${b.u >= 0 ? '+' : ''}${b.u.toFixed(2)}U</b> · 已加 ${b.used.toFixed(2)}U · 还可加 <b>${b.avail.toFixed(2)}U</b>`;
+    }
+  }
+}
+
+function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
+  const capClosed = posCapital(pos) * r;
+  return {
+    symbol: DATA.meta.symbol, tf: activeTF,
+    mode: TR.active && !TR.revealed ? 'trainer' : 'replay',
+    pid: pos.id,
+    side: pos.side, leverage: pos.entries[0].leverage, capital: +capClosed.toFixed(2),
+    entry_ts: pos.entries[0].t, exit_ts: exitTs,
+    entry_ts_list: pos.entries.map(e => e.t), entry_prices: pos.entries.map(e => e.price),
+    entry_time: fmtTimeReal(pos.entries[0].t), entry: +posAvgEntry(pos).toFixed(2),
+    exit_time: fmtTimeReal(exitTs), exit_price: exitPrice,
+    stop: pos.stop ?? '', logic: pos.entries[0].logic,
+    adds: pos.entries.length - 1, ratio: +r.toFixed(2), partial: r < 1,
+    entries: pos.entries.map(e => ({ t: fmtTimeReal(e.t), price: e.price, capital: e.capital, leverage: e.leverage, logic: e.logic })),
+    exit_logic: exitLogic,
+    pnl_u: +pnl.toFixed(2), pnl_pct_capital: +(pnl / Math.max(capClosed, 1e-9) * 100).toFixed(2),
+    result: pnl > 0 ? '盈' : (pnl < 0 ? '亏' : '平'),
+    exit_reason: reason + (r < 1 ? ` ${Math.round(r * 100)}%` : ''),
+  };
+}
+
+function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false){
+  if (!force && !posLayoutOk(pos)){
+    alert(`该持仓绑定 ${pos.sym} ${pos.tf}，请在本局内结算。`);
+    return false;
+  }
+  const bar = curBar();
+  if (!bar) return false;
+  const pnl = pnlOf(pos, bar.close) * r;
+  const rec = makeRec(pos, r, bar.close, bar.time, pnl, exitLogic, reason);
+  if (TR.active && !TR.revealed) TR.session.push(rec);
+  acctAdj(posCapital(pos) * r + pnl);
+  if (r >= 1) positions = positions.filter(p => p !== pos);
+  else pos.entries.forEach(e => { e.capital = +(e.capital * (1 - r)).toFixed(6); });
+  renderJournal();
+  refreshAll({ light: true });
+  return true;
+}
+
+function checkStopAndLiquidate(){
+  const bar = curBar();
+  const mine = positions.filter(p => posLayoutOk(p));
+  if (!bar || !mine.length) return;
+  let changed = false;
+  for (const pos of mine){
+    const cap = posCapital(pos);
+    const hitStop = pos.stop != null &&
+      ((pos.side === '多' && bar.low <= pos.stop) ||
+       (pos.side === '空' && bar.high >= pos.stop));
+    const liq = pnlOf(pos, bar.close) <= -cap;
+    if (!hitStop && !liq) continue;
+    const px = hitStop ? pos.stop : bar.close;
+    const pnl = hitStop ? pnlOf(pos, pos.stop) : -cap;
+    const rec = makeRec(pos, 1, px, bar.time, Math.max(pnl, -cap), '', hitStop ? '触发止损' : '单笔爆仓');
+    if (TR.active && !TR.revealed) TR.session.push(rec);
+    acctAdj(cap + Math.max(pnl, -cap));
+    positions = positions.filter(p => p !== pos);
+    changed = true;
+  }
+  if (changed) renderJournal();
+}
+
+function checkAccountBlowup(){
+  if (!inReplay()) return false;
+  if (acctEquity() > 0) return false;
+  for (const pos of [...positions].filter(p => posLayoutOk(p)))
+    closePosObj(pos, 1, '账户净值归零, 全部强平', '账户爆仓', true);
+  acctSave({ ...acctLoad(), [curModeKey()]: 0 });
+  persistFlush();
+  if (TR.active && !TR.revealed){
+    revealTrainer(true, '💥 账户爆仓, 练习强制结束');
+  }
+  return true;
+}
+
+function refreshPositionLines(){
+  if (!candleSeries) return;
+  for (const l of posPriceLines){
+    try { candleSeries.removePriceLine(l.line); } catch {}
+  }
+  posPriceLines = [];
+  if (!inReplay() || !positions.length) return;
+  for (const pos of positions){
+    const color = posColor(pos);
+    posPriceLines.push({ pid: pos.id, kind: 'entry', line: candleSeries.createPriceLine({
+      price: posAvgEntry(pos), color, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true, title: `#${pos.id}`,
+    })});
+    if (pos.stop != null){
+      posPriceLines.push({ pid: pos.id, kind: 'stop', line: candleSeries.createPriceLine({
+        price: pos.stop, color: t().down, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true, title: `${pos.id}损`,
+      })});
+    }
+  }
+}
+
+function setupJournal(){
+  document.getElementById('jOpen').addEventListener('click', () => {
+    if (!inReplay()){ alert('请先开始练习'); return; }
+    const logic = document.getElementById('jLogic').value.trim();
+    if (!logic){ alert('开单逻辑必填'); return; }
+    const bar = curBar();
+    if (!bar) return;
+    const margin = +(document.getElementById('jCapital').value) || 10000;
+    if (margin > acctBal()){
+      alert(`余额不足: 当前可用 ${acctBal().toFixed(2)}U`);
+      return;
+    }
+    acctAdj(-margin);
+    positions.push({
+      id: posSeq++,
+      sym: currentSym, tf: activeTF,
+      side: document.getElementById('jSide').value,
+      stop: document.getElementById('jStop').value ? +document.getElementById('jStop').value : null,
+      entries: [{
+        t: bar.time,
+        price: +document.getElementById('jEntry').value || bar.close,
+        capital: margin,
+        leverage: Math.min(125, +document.getElementById('jLeverage').value || 10),
+        logic,
+      }],
+    });
+    document.getElementById('jLogic').value = '';
+    renderJournal();
+    refreshAll({ light: true });
+  });
+
+  document.getElementById('jPositions').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const card = b.closest('.pos-card');
+    const pos = card ? posById(+card.dataset.pid) : null;
+    if (!pos) return;
+    const q = sel => card.querySelector(sel);
+    const showOnly = secName => {
+      for (const s of card.querySelectorAll('.sec-add,.sec-exit')) s.style.display = 'none';
+      if (secName) q(secName).style.display = 'flex';
+    };
+    switch (b.dataset.act){
+      case 'add-toggle': {
+        const bd = addBudget(pos);
+        if (bd.avail <= 0){
+          alert(bd.u <= 0 ? '本笔暂无浮盈，无法加仓' : `浮盈已全部用于加仓`);
+          return;
+        }
+        showOnly(q('.sec-add').style.display === 'none' ? '.sec-add' : null);
+        const capInp = q('.inp-add-cap');
+        if (capInp) capInp.value = bd.avail.toFixed(2);
+        break;
+      }
+      case 'close-toggle':
+        showOnly(q('.sec-exit').style.display === 'none' ? '.sec-exit' : null);
+        break;
+      case 'add-ok': {
+        const logic = q('.inp-add-logic').value.trim();
+        if (!logic){ alert('加仓逻辑必填'); return; }
+        const bar = curBar(); if (!bar) return;
+        const bd = addBudget(pos);
+        const wantCap = +q('.inp-add-cap').value || 0;
+        if (wantCap <= 0){ alert('请填写加仓本金'); return; }
+        if (wantCap > bd.avail + 1e-9){
+          alert(`只能用本笔浮盈加仓，还可加 ${bd.avail.toFixed(2)}U`);
+          return;
+        }
+        pos.entries.push({
+          t: bar.time,
+          price: +q('.inp-add-price').value || bar.close,
+          capital: wantCap,
+          leverage: Math.min(125, +q('.inp-add-lev').value || pos.entries[pos.entries.length - 1].leverage),
+          logic,
+        });
+        const ns = q('.inp-add-stop').value;
+        if (ns) pos.stop = +ns;
+        renderJournal();
+        refreshAll({ light: true });
+        break;
+      }
+      case 'close-ok': {
+        const logic = q('.inp-exit-logic').value.trim();
+        if (!logic){ alert('平仓逻辑必填'); return; }
+        let ratio = (+q('.inp-exit-ratio').value || 100) / 100;
+        ratio = Math.min(1, Math.max(0.01, ratio));
+        closePosObj(pos, ratio, logic);
+        break;
+      }
+    }
+  });
+}
