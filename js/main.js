@@ -40,6 +40,14 @@ function setupChrome(){
     applyTheme();
   });
   document.getElementById('maPeriods').addEventListener('change', () => { rebuildMA(); toast('MA 已更新'); });
+  document.getElementById('maComma').addEventListener('click', () => {
+    const el = document.getElementById('maPeriods');
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, start) + ',' + el.value.slice(end);
+    el.focus();
+    try { el.setSelectionRange(start + 1, start + 1); } catch {}
+  });
   document.getElementById('overlayToggle').addEventListener('click', e => {
     const b = e.target.closest('button[data-ov]'); if (!b) return;
     b.classList.toggle('active');
@@ -48,9 +56,12 @@ function setupChrome(){
     if (ov === 'ma'){
       maSeries.forEach(it => it.series.applyOptions({ visible: on }));
       document.getElementById('maPeriods').style.display = on ? '' : 'none';
+      document.getElementById('maComma').style.display = on ? '' : 'none';
     } else {
       const el = document.getElementById(ov === 'macd' ? 'macd' : 'volume');
       el.style.display = on ? '' : 'none';
+      if (on) el.style.width = '';
+      requestAnimationFrame(() => { alignPanes(); requestAnimationFrame(alignPanes); });
     }
   });
   document.getElementById('prefetchBtn').addEventListener('click', prefetchAll);

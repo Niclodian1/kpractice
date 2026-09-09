@@ -81,6 +81,21 @@ function practiceEntries(){
 
 const fmtLogic = (s, n=16) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
 
+function selectedLogic(root){
+  if (!root) return '';
+  return [...root.querySelectorAll('.chip.active')].map(b => b.dataset.logic).join('、');
+}
+function clearLogic(root){
+  if (!root) return;
+  root.querySelectorAll('.chip.active').forEach(b => b.classList.remove('active'));
+}
+function syncMarginInput(){
+  const el = document.getElementById('jCapital');
+  if (!el) return;
+  const bal = acctBal();
+  el.value = bal > 0 ? String(+bal.toFixed(2)) : '0';
+}
+
 function renderJournal(){
   const box = document.getElementById('jPositions');
   if (!box) return;
@@ -106,8 +121,9 @@ function renderJournal(){
     const col = u >= 0 ? 'var(--up)' : 'var(--down)';
     const pv = ok && bar ? posValue(pos, bar.close) : cap;
     const lastLev = pos.entries[pos.entries.length - 1].leverage;
+    const addN = pos.entries.length - 1;
     html += `<div class="pos-card" data-pid="${pos.id}">
-      <b>#${pos.id} ${pos.side}</b> · ${pos.entries.length}笔 · 均价 ${fmt(posAvgEntry(pos))} · 止损 ${pos.stop ?? '—'}<br>
+      <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))} · 止损 ${pos.stop ?? '—'}<br>
       <span style="opacity:.85">持仓金额 ${pv.toFixed(1)} U</span><br>
       <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
       ${pos.entries.map((e, i) =>
@@ -123,7 +139,7 @@ function renderJournal(){
         <label>杠杆<input type="number" class="inp-add-lev" inputmode="numeric" value="${lastLev}" min="1" max="125"></label>
         <label>加仓价<input type="number" class="inp-add-price" inputmode="decimal" placeholder="当前收盘"></label>
         <label>止损（空=不变）<input type="number" class="inp-add-stop" inputmode="decimal"></label>
-        <label>加仓逻辑（必填）<textarea class="inp-add-logic" rows="2"></textarea></label>
+        <label>加仓逻辑（空=浮盈加仓）<textarea class="inp-add-logic" rows="2" placeholder="浮盈加仓"></textarea></label>
         <button class="btn primary" data-act="add-ok" data-pid="${pos.id}" type="button">确认加仓</button>
       </div>
       <div class="sec-exit" style="display:none;flex-direction:column;gap:6px;margin-top:6px;">
@@ -217,6 +233,7 @@ function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false){
   if (r >= 1) positions = positions.filter(p => p !== pos);
   else pos.entries.forEach(e => { e.capital = +(e.capital * (1 - r)).toFixed(6); });
   renderJournal();
+  syncMarginInput();
   refreshAll({ light: true });
   return true;
 }
@@ -241,7 +258,10 @@ function checkStopAndLiquidate(){
     positions = positions.filter(p => p !== pos);
     changed = true;
   }
-  if (changed) renderJournal();
+  if (changed){
+    renderJournal();
+    syncMarginInput();
+  }
 }
 
 function checkAccountBlowup(){
@@ -280,17 +300,23 @@ function refreshPositionLines(){
 }
 
 function setupJournal(){
+  document.getElementById('jLogicPicks').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    chip.classList.toggle('active');
+  });
   document.getElementById('jOpen').addEventListener('click', () => {
     if (!inReplay()){ alert('请先开始练习'); return; }
-    const logic = document.getElementById('jLogic').value.trim();
-    if (!logic){ alert('开单逻辑必填'); return; }
+    const logic = selectedLogic(document.getElementById('jLogicPicks'));
     const bar = curBar();
     if (!bar) return;
-    const margin = +(document.getElementById('jCapital').value) || 10000;
-    if (margin > acctBal()){
-      alert(`余额不足: 当前可用 ${acctBal().toFixed(2)}U`);
+    const maxBal = acctBal();
+    const margin = +(document.getElementById('jCapital').value) || maxBal;
+    if (margin > maxBal + 1e-9){
+      alert(`余额不足: 当前可用 ${maxBal.toFixed(2)}U`);
       return;
     }
+    if (margin <= 0){ alert('保证金须大于 0'); return; }
     acctAdj(-margin);
     positions.push({
       id: posSeq++,
@@ -305,8 +331,9 @@ function setupJournal(){
         logic,
       }],
     });
-    document.getElementById('jLogic').value = '';
+    clearLogic(document.getElementById('jLogicPicks'));
     renderJournal();
+    syncMarginInput();
     refreshAll({ light: true });
   });
 
@@ -337,8 +364,7 @@ function setupJournal(){
         showOnly(q('.sec-exit').style.display === 'none' ? '.sec-exit' : null);
         break;
       case 'add-ok': {
-        const logic = q('.inp-add-logic').value.trim();
-        if (!logic){ alert('加仓逻辑必填'); return; }
+        const logic = q('.inp-add-logic').value.trim() || '浮盈加仓';
         const bar = curBar(); if (!bar) return;
         const bd = addBudget(pos);
         const wantCap = +q('.inp-add-cap').value || 0;

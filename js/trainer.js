@@ -76,7 +76,7 @@ async function enterTrainer(){
 
     for (let tries = 0; tries < 30; tries++){
       const meta = pool[randInt(pool.length)];
-      setLoading(true, `加载 ${meta.id}…`);
+      setLoading(true, '加载K线…');
       await loadSymbol(meta.id);
       let tfs = (DATA.meta.timeframes || []).filter(tf => (DATA.levels[tf] && DATA.levels[tf].candles.length >= need));
       if (tfSel && !tfs.includes(tfSel)) continue;
@@ -92,15 +92,16 @@ async function enterTrainer(){
       TR.sym = meta.id; TR.tf = tf;
       TR.startIdx = TR.LOOKBACK + randInt(len - TR.LOOKBACK - TR.maxStep - 2);
       TR.startTs = candles[TR.startIdx][0];
+      applyBlind(true);
       showPractice();
+      syncMarginInput();
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       ensureCharts();
-      applyBlind(true);
       trainerChartLock(true);
       document.getElementById('trainerBanner').style.display = 'none';
       enterReplay(TR.startTs);
       updateTrainerUI();
-      requestAnimationFrame(() => { applySeries(); lockViewport(); });
+      requestAnimationFrame(() => { applySeries(); lockViewport(); alignPanes(); });
       return;
     }
     alert('随机定位失败。可改选日线，或先点「下载全部品种」。');
@@ -177,9 +178,10 @@ function quitTrainer(){
 
 function showAnswerBanner(){
   const el = document.getElementById('trainerBanner');
-  const n = TR.session.length;
-  const tot = TR.session.reduce((a, r) => a + r.pnl_u, 0);
-  const pct = TR.session.reduce((a, r) => a + (r.pnl_pct_capital || 0), 0);
+  const grouped = groupTradesByPid(TR.session);
+  const n = grouped.length;
+  const tot = grouped.reduce((a, r) => a + r.pnl_u, 0);
+  const pct = grouped.reduce((a, r) => a + (r.pnl_pct_capital || 0), 0);
   el.innerHTML =
     `<b>本局答案：${DATA.meta.symbol} · ${TR.tf}</b>` +
     `<span>起点 <b>${fmtTimeReal(TR.startTs)}</b> · 走了 ${TR.step} 根 · ${TR.endReason || '—'}</span>` +
@@ -187,10 +189,16 @@ function showAnswerBanner(){
   el.style.display = 'flex';
 }
 
+function sessionTradeCount(){
+  const pids = new Set(TR.session.map(r => r.pid));
+  for (const p of positions) pids.add(p.id);
+  return pids.size;
+}
+
 function updateTrainerUI(){
   const inRun = trLocked();
   document.getElementById('trainerProgress').textContent =
-    `${TR.step}/${TR.maxStep} · ${TR.session.length}笔`;
+    `${TR.step}/${TR.maxStep} · ${sessionTradeCount()}笔`;
   document.getElementById('trainerNext').hidden = !inRun;
   document.getElementById('trainerNext').disabled = !inRun;
   document.getElementById('trainerReveal').hidden = !inRun;
@@ -205,7 +213,7 @@ function updateTrainerUI(){
 function recordSession(){
   const st = trStatsLoad();
   st.sessions++;
-  for (const r of TR.session){
+  for (const r of groupTradesByPid(TR.session)){
     st.orders++;
     if (r.pnl_u > 0) st.wins++;
     if (r.pnl_u >= 0) st.grossWin += r.pnl_u; else st.grossLoss += r.pnl_u;
@@ -259,13 +267,16 @@ function renderTrainerSessions(){
     return `<div class="ts-item" data-tsid="${s.id}">
       <div class="ts-head" data-toggle="1">
         <span>${new Date(s.ts).toLocaleString('zh-CN', { hour12:false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })} · ${s.sym || '?'} ${s.tf || ''}</span>
-        <span>${(s.trades || []).length}笔 · <b style="color:${col}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b> ${condTag}</span>
+        <span>${groupTradesByPid(s.trades || []).length}笔 · <b style="color:${col}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b> ${condTag}</span>
       </div>
       <div class="ts-detail" hidden>
         <div>本金 ${s.capital.toLocaleString()}U → 终值 <b>${s.endCapital.toLocaleString()}U</b> · 步数 ${s.steps}</div>
-        ${(s.trades && s.trades.length) ? '<table><tr style="opacity:.6"><td>时间</td><td>方向</td><td>入场→出场</td><td style="text-align:right">盈亏U</td></tr>' +
-          s.trades.map(t0 => `<tr><td>${t0.exit_time || ''}</td><td>${t0.side}${t0.adds > 0 ? '+'+t0.adds : ''}</td><td>${t0.entry}→${t0.exit_price}</td><td style="text-align:right;color:${t0.pnl_u >= 0 ? 'var(--up)' : 'var(--down)'}">${t0.pnl_u >= 0 ? '+' : ''}${(+t0.pnl_u).toFixed(1)}</td></tr>`).join('') + '</table>'
-          : '<div style="opacity:.6">本局未开单。</div>'}
+        ${(() => {
+          const trades = groupTradesByPid(s.trades || []);
+          return trades.length ? '<table><tr style="opacity:.6"><td>时间</td><td>方向</td><td>入场→出场</td><td style="text-align:right">盈亏U</td></tr>' +
+          trades.map(t0 => `<tr><td>${t0.exit_time || ''}</td><td>${t0.side}${t0.adds > 0 ? '+'+t0.adds : ''}</td><td>${t0.entry}→${t0.exit_price}</td><td style="text-align:right;color:${t0.pnl_u >= 0 ? 'var(--up)' : 'var(--down)'}">${t0.pnl_u >= 0 ? '+' : ''}${(+t0.pnl_u).toFixed(1)}</td></tr>`).join('') + '</table>'
+          : '<div style="opacity:.6">本局未开单。</div>';
+        })()}
       </div>
     </div>`;
   }).join('');

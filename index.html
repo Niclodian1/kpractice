@@ -77,19 +77,18 @@
   </section>
 
   <section id="practiceView" class="view" hidden>
-    <div class="chart-box">
-      <div id="chart"></div>
-      <div id="volume"></div>
-      <div id="macd"></div>
+    <div class="chart-toolbar">
       <div class="legend">
         <span class="legend-symbol">???</span>
         <span class="legend-date" id="legendDate">—</span>
         <span class="legend-ohlc" id="legendOhlc">—</span>
         <span class="legend-chg" id="legendChg"></span>
       </div>
-      <div id="trainerBanner"></div>
-      <div class="chart-tools">
-        <label class="ma-lab">MA <input id="maPeriods" value="20,60" inputmode="numeric"></label>
+      <div class="chart-tools-right">
+        <label class="ma-lab">MA
+          <input id="maPeriods" type="text" inputmode="text" enterkeyhint="done" autocapitalize="off" autocomplete="off" value="20,60">
+        </label>
+        <button class="btn ma-comma" id="maComma" type="button" title="插入逗号">,</button>
         <div class="seg" id="overlayToggle">
           <button type="button" data-ov="ma" class="active">MA</button>
           <button type="button" data-ov="macd" class="active">MACD</button>
@@ -97,12 +96,18 @@
         </div>
       </div>
     </div>
+    <div class="chart-box">
+      <div id="chart"></div>
+      <div id="volume"></div>
+      <div id="macd"></div>
+      <div id="trainerBanner"></div>
+    </div>
 
     <div class="trade-dock" id="tradeDock">
       <h3>本局交易 <span id="journalMode"></span></h3>
       <div id="journalForm" class="journal-form">
         <div class="grid3">
-          <label>保证金U<input id="jCapital" type="number" inputmode="decimal" value="10000" min="1"></label>
+          <label>保证金U<input id="jCapital" type="number" inputmode="decimal" value="100000" min="1"></label>
           <label>杠杆<input id="jLeverage" type="number" inputmode="numeric" value="10" min="1" max="125"></label>
           <label>方向<select id="jSide"><option value="多">做多</option><option value="空">做空</option></select></label>
         </div>
@@ -110,9 +115,16 @@
           <label>开仓价<input id="jEntry" type="number" inputmode="decimal" placeholder="空=收盘"></label>
           <label>止损价<input id="jStop" type="number" inputmode="decimal" placeholder="可选"></label>
         </div>
-        <label>开单逻辑（必填）
-          <textarea id="jLogic" rows="2" placeholder="例: 突破前高回踩不破，小时趋势向上"></textarea>
-        </label>
+        <div class="logic-picks" id="jLogicPicks">
+          <div class="logic-label">开单逻辑（可多选，可不选）</div>
+          <div class="chips">
+            <button type="button" class="chip" data-logic="MACD背离">MACD背离</button>
+            <button type="button" class="chip" data-logic="均线突破">均线突破</button>
+            <button type="button" class="chip" data-logic="裸K">裸K</button>
+            <button type="button" class="chip" data-logic="趋势线突破">趋势线突破</button>
+            <button type="button" class="chip" data-logic="成交量放大">成交量放大</button>
+          </div>
+        </div>
         <button class="btn primary" id="jOpen" type="button">开单（当前K线）</button>
       </div>
       <div id="jPositions"></div>

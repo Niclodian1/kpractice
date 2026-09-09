@@ -160,30 +160,43 @@ input, select, textarea {
   border-bottom: 1px solid var(--border);
 }
 #chart { flex: 1 1 auto; min-height: 160px; }
-#volume { height: 56px; flex: 0 0 auto; border-top: 1px solid var(--border); }
-#macd { height: 64px; flex: 0 0 auto; border-top: 1px solid var(--border); }
+#volume { height: 48px; flex: 0 0 auto; border-top: 1px solid var(--border); }
+#macd { height: 52px; flex: 0 0 auto; border-top: 1px solid var(--border); }
 
+.chart-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
 .legend {
-  position: absolute; top: 6px; left: 8px; z-index: 5;
-  display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 3px 7px; border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
   font-size: 11px; font-variant-numeric: tabular-nums;
-  pointer-events: none; max-width: 78%;
+  min-width: 0; flex: 1 1 auto;
 }
 .legend-symbol { font-weight: 700; }
 .legend-date { color: var(--muted); }
 .legend-ohlc { color: var(--ink-2); }
 .legend-chg { font-weight: 700; }
 
-.chart-tools {
-  position: absolute; top: 6px; right: 8px; z-index: 6;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+.chart-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
-.ma-lab { font-size: 11px; color: var(--muted); }
+.ma-lab { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin: 0; }
 .ma-lab input {
-  display: inline-block; width: 72px; margin: 0 0 0 4px;
-  padding: 4px 6px; font-size: 12px; min-height: 0;
+  display: inline-block; width: 92px; margin: 0;
+  padding: 4px 6px; font-size: 16px; min-height: 32px;
+}
+.ma-comma {
+  min-height: 32px; width: 36px; padding: 0;
+  font-size: 16px; font-weight: 700;
 }
 .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .seg button {
@@ -191,6 +204,26 @@ input, select, textarea {
   padding: 5px 8px; font-size: 11px; font-family: inherit;
 }
 .seg button.active { background: var(--ink); color: var(--surface); font-weight: 600; }
+
+.logic-picks { display: flex; flex-direction: column; gap: 6px; }
+.logic-label { font-size: 11px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+}
+.chip.active {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+  font-weight: 600;
+}
 
 #trainerBanner {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 8;

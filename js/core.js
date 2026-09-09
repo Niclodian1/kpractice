@@ -150,7 +150,7 @@ async function loadCatalog(){
 async function loadSymbol(sym){
   if (DATA && currentSym === sym) return DATA;
   const r = await fetch('data/' + String(sym).toLowerCase() + '.json');
-  if (!r.ok) throw new Error('加载 ' + sym + ' 失败');
+  if (!r.ok) throw new Error('K线加载失败');
   DATA = await r.json();
   currentSym = sym;
   return DATA;

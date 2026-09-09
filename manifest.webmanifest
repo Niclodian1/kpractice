@@ -2,7 +2,7 @@
   "name": "盘感练习",
   "short_name": "盘感练习",
   "description": "离线K线盲测练习，导出交易明细 CSV",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

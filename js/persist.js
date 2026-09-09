@@ -74,6 +74,35 @@ function persistFlush(){
   idbSet(ACCT_KEY, acctLoad());
 }
 
+function groupTradesByPid(recs){
+  const map = new Map();
+  for (const r of recs || []){
+    const id = r.pid != null ? r.pid : `${r.entry_time}|${r.side}|${r.entry}`;
+    const prev = map.get(id);
+    if (!prev){
+      map.set(id, {
+        ...r,
+        pnl_u: +r.pnl_u || 0,
+        capital: +r.capital || 0,
+        adds: r.adds || 0,
+      });
+      continue;
+    }
+    prev.pnl_u += +r.pnl_u || 0;
+    prev.capital += +r.capital || 0;
+    prev.adds = Math.max(prev.adds || 0, r.adds || 0);
+    prev.exit_time = r.exit_time;
+    prev.exit_price = r.exit_price;
+    prev.exit_logic = [prev.exit_logic, r.exit_logic].filter(Boolean).join(' / ');
+    prev.exit_reason = r.exit_reason;
+    prev.partial = false;
+    prev.ratio = 1;
+    prev.result = prev.pnl_u > 0 ? '盈' : (prev.pnl_u < 0 ? '亏' : '平');
+    prev.pnl_pct_capital = +(prev.pnl_u / Math.max(prev.capital, 1e-9) * 100).toFixed(2);
+  }
+  return [...map.values()];
+}
+
 function csvEscape(v){
   return '"' + String(v ?? '').replace(/"/g, '""') + '"';
 }
@@ -96,7 +125,7 @@ function buildTrainerCsv(){
       steps: s.steps, condition: s.cond,
       session_capital: s.capital, session_end_capital: s.endCapital, session_pnl: s.pnl,
     };
-    const trades = s.trades || [];
+    const trades = groupTradesByPid(s.trades || []);
     if (!trades.length){
       rows.push({ ...head });
       continue;

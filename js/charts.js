@@ -72,6 +72,7 @@ function ensureCharts(){
   macdChart.timeScale().subscribeVisibleLogicalRangeChange(syncAll);
   chart.timeScale().subscribeVisibleLogicalRangeChange(enforcePracticeBounds);
 
+  window.addEventListener('resize', () => requestAnimationFrame(alignPanes));
   chart.subscribeCrosshairMove(param => {
     const oh = document.getElementById('legendOhlc');
     const ch = document.getElementById('legendChg');
@@ -192,6 +193,7 @@ function applyTheme(){
   macdLineSeries.applyOptions({ color: t().ink2 });
   macdSignalSeries.applyOptions({ color: t().muted });
   applySeries();
+  requestAnimationFrame(alignPanes);
 }
 
 function trainerChartLock(on){
@@ -229,9 +231,27 @@ function enforcePracticeBounds(r){
   }
 }
 
+function alignPanes(){
+  if (!chart) return;
+  const Wm = chart.timeScale().width();
+  if (!Wm || Wm < 80) return;
+  const setW = (id, ch) => {
+    const el = document.getElementById(id);
+    if (!el || el.style.display === 'none') return;
+    let ps = 0;
+    try { ps = ch.priceScale('right').width(); } catch { return; }
+    if (!ps || ps < 8) return;
+    const target = Math.max(80, Math.round(Wm + ps));
+    if (Math.abs(el.clientWidth - target) > 1) el.style.width = target + 'px';
+  };
+  setW('volume', volumeChart);
+  setW('macd', macdChart);
+}
+
 function refreshAll(opts = {}){
   applySeries();
   updateLivePnl();
   if (typeof refreshPositionLines === 'function') refreshPositionLines();
+  requestAnimationFrame(alignPanes);
   if (trLocked()) requestAnimationFrame(lockViewport);
 }
