@@ -103,7 +103,14 @@
       <div id="trainerBanner"></div>
     </div>
 
-    <div class="trade-dock" id="tradeDock">
+    <div id="tradeSheet" class="trade-sheet" hidden>
+      <div class="sheet-backdrop" id="tradeSheetBackdrop"></div>
+      <div class="sheet-panel">
+        <div class="sheet-grab">
+          <span class="grab-bar"></span>
+          <button class="btn" id="tradeSheetClose" type="button">收回</button>
+        </div>
+        <div class="trade-dock" id="tradeDock">
       <h3>本局交易 <span id="journalMode"></span></h3>
       <div id="journalForm" class="journal-form">
         <div class="grid3">
@@ -128,10 +135,13 @@
         <button class="btn primary" id="jOpen" type="button">开单（当前K线）</button>
       </div>
       <div id="jPositions"></div>
+        </div>
+      </div>
     </div>
 
     <div class="trainer-bar" id="trainerCtl">
       <span class="progress" id="trainerProgress">0/200</span>
+      <button class="btn" id="tradeToggle" type="button">交易</button>
       <button class="btn primary" id="trainerNext" type="button">下一根</button>
       <button class="btn" id="trainerReveal" type="button">揭示</button>
       <button class="btn" id="trainerQuit" type="button">放弃</button>

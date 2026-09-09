@@ -198,7 +198,8 @@ function applyTheme(){
 
 function trainerChartLock(on){
   if (!chart) return;
-  const o = on ? { handleScroll: false, handleScale: false } : { handleScroll: true, handleScale: true };
+  // 练习中允许缩放/平移, 数据层已切掉窗口外K线, 视口再夹在 [0, n+pad]
+  const o = { handleScroll: true, handleScale: true };
   chart.applyOptions(o); volumeChart.applyOptions(o); macdChart.applyOptions(o);
   chart.timeScale().applyOptions({
     tickMarkFormatter: on
@@ -208,27 +209,68 @@ function trainerChartLock(on){
 }
 
 const RIGHT_PAD = 8;
+const MIN_BARS = 12;
 let _lvLocking = false;
+
+function practiceRangeLimits(){
+  const n = candlesFor().length;
+  return { n, minFrom: 0, maxTo: n + RIGHT_PAD };
+}
+function clampPracticeRange(r, pinRightIfNeeded){
+  if (!trLocked() || !r || !chart) return;
+  const { n, minFrom, maxTo } = practiceRangeLimits();
+  if (!n) return;
+  let from = r.from, to = r.to;
+  if (!isFinite(from) || !isFinite(to)) return;
+  if (pinRightIfNeeded && n - 1 > to - 0.2){
+    const shift = (n - 1 + RIGHT_PAD) - to;
+    from += shift;
+    to += shift;
+  }
+  let span = to - from;
+  const maxSpan = Math.max(MIN_BARS, maxTo - minFrom);
+  if (span < MIN_BARS){
+    const mid = (from + to) / 2;
+    from = mid - MIN_BARS / 2;
+    to = mid + MIN_BARS / 2;
+    span = MIN_BARS;
+  } else if (span > maxSpan){
+    const mid = (from + to) / 2;
+    from = mid - maxSpan / 2;
+    to = mid + maxSpan / 2;
+    span = maxSpan;
+  }
+  if (from < minFrom){ to += minFrom - from; from = minFrom; }
+  if (to > maxTo){ from -= (to - maxTo); to = maxTo; }
+  if (from < minFrom) from = minFrom;
+  if (to > maxTo) to = maxTo;
+  if (to - from < MIN_BARS) from = Math.max(minFrom, to - MIN_BARS);
+  if (Math.abs(from - r.from) < 0.04 && Math.abs(to - r.to) < 0.04) return;
+  _lvLocking = true;
+  chart.timeScale().setVisibleLogicalRange({ from, to });
+  requestAnimationFrame(() => { _lvLocking = false; });
+}
 function lockViewport(){
   if (!trLocked() || !chart) return;
-  const n = candlesFor().length;
+  const { n, minFrom, maxTo } = practiceRangeLimits();
   if (!n) return;
-  const w = Math.min(TR.LOOKBACK + 5, TR.LOOKBACK + TR.step + RIGHT_PAD + 3);
+  const w = Math.min(80, n);
   _lvLocking = true;
-  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - w), to: n + RIGHT_PAD });
+  chart.timeScale().setVisibleLogicalRange({
+    from: Math.max(minFrom, n - w),
+    to: maxTo,
+  });
   requestAnimationFrame(() => { _lvLocking = false; });
+}
+function keepNowInView(){
+  if (!trLocked() || !chart) return;
+  const r = chart.timeScale().getVisibleLogicalRange();
+  if (!r || !isFinite(r.from) || !isFinite(r.to)){ lockViewport(); return; }
+  clampPracticeRange(r, true);
 }
 function enforcePracticeBounds(r){
   if (!trLocked() || !r || _lvLocking || !TR.sym || !chart) return;
-  const n = candlesFor().length;
-  const left = 0;
-  const right = n + RIGHT_PAD;
-  if (Math.abs(r.from - left) > 8 || Math.abs(r.to - right) > 8){
-    _lvLocking = true;
-    const w = Math.min(TR.LOOKBACK + 5, n + RIGHT_PAD);
-    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - w), to: right });
-    requestAnimationFrame(() => { _lvLocking = false; });
-  }
+  clampPracticeRange(r, false);
 }
 
 function alignPanes(){
@@ -253,5 +295,5 @@ function refreshAll(opts = {}){
   updateLivePnl();
   if (typeof refreshPositionLines === 'function') refreshPositionLines();
   requestAnimationFrame(alignPanes);
-  if (trLocked()) requestAnimationFrame(lockViewport);
+  if (trLocked()) requestAnimationFrame(keepNowInView);
 }

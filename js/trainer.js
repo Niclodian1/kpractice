@@ -3,12 +3,24 @@
 const randInt = n => Math.floor(Math.random() * n);
 
 function showHome(){
+  setTradeSheet(false);
   document.getElementById('homeView').hidden = false;
   document.getElementById('practiceView').hidden = true;
 }
 function showPractice(){
+  setTradeSheet(false);
   document.getElementById('homeView').hidden = true;
   document.getElementById('practiceView').hidden = false;
+}
+function setTradeSheet(on){
+  const sheet = document.getElementById('tradeSheet');
+  const btn = document.getElementById('tradeToggle');
+  if (sheet) sheet.hidden = !on;
+  if (btn) btn.classList.toggle('active', !!on);
+}
+function toggleTradeSheet(){
+  const sheet = document.getElementById('tradeSheet');
+  setTradeSheet(sheet.hidden);
 }
 
 function applyBlind(on){
@@ -205,6 +217,11 @@ function updateTrainerUI(){
   document.getElementById('trainerQuit').hidden = !inRun;
   document.getElementById('trainerEnd').hidden = !(TR.active && TR.revealed);
   document.getElementById('trainerAgain').hidden = !(TR.active && TR.revealed);
+  const tradeBtn = document.getElementById('tradeToggle');
+  if (tradeBtn){
+    const nPos = positions.length;
+    tradeBtn.textContent = nPos ? `交易 ${nPos}` : '交易';
+  }
   const btn = document.getElementById('trainerBtn');
   btn.disabled = TR.active;
   btn.textContent = !TR.active ? '开始练习' : (TR.revealed ? '练习完成' : '练习中…');
@@ -330,6 +347,9 @@ function setupTrainer(){
     const d = head.parentElement.querySelector('.ts-detail');
     if (d) d.hidden = !d.hidden;
   });
+  document.getElementById('tradeToggle').addEventListener('click', toggleTradeSheet);
+  document.getElementById('tradeSheetClose').addEventListener('click', () => setTradeSheet(false));
+  document.getElementById('tradeSheetBackdrop').addEventListener('click', () => setTradeSheet(false));
   document.getElementById('trainerNext').addEventListener('click', trainerStep);
   document.getElementById('trainerReveal').addEventListener('click', () => revealTrainer(false));
   document.getElementById('trainerQuit').addEventListener('click', quitTrainer);

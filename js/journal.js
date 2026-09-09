@@ -335,6 +335,8 @@ function setupJournal(){
     renderJournal();
     syncMarginInput();
     refreshAll({ light: true });
+    setTradeSheet(true);
+    updateTrainerUI();
   });
 
   document.getElementById('jPositions').addEventListener('click', e => {
