@@ -144,10 +144,10 @@ function trainerStep(){
 
 function revealTrainer(auto, note){
   if (!TR.active || TR.revealed) return;
-  while (positions.length) closePosObj(positions[0], 1, auto ? '步数走满, 揭示强平' : '主动揭示, 按现价强平', undefined, true);
+  while (positions.length) closePosObj(positions[0], 1, auto ? '步数走满, 按现价强平' : '结束练习, 按现价强平', undefined, true);
   const endCapital = acctBal();
   TR.endReason = (note && String(note).includes('爆仓')) ? '账户爆仓'
-    : (auto ? '步数走满' : '手动揭示');
+    : (auto ? '步数走满' : '结束练习');
   TR.revealed = true;
   stopPlay();
   replayT = null;
@@ -214,7 +214,6 @@ function updateTrainerUI(){
     `${TR.step}/${TR.maxStep} · ${sessionTradeCount()}笔`;
   document.getElementById('trainerNext').hidden = !inRun;
   document.getElementById('trainerNext').disabled = !inRun;
-  document.getElementById('trainerReveal').hidden = !inRun;
   document.getElementById('trainerQuit').hidden = !inRun;
   document.getElementById('trainerEnd').hidden = !(TR.active && TR.revealed);
   document.getElementById('trainerAgain').hidden = !(TR.active && TR.revealed);
@@ -353,7 +352,6 @@ function setupTrainer(){
   document.getElementById('tradeSheetClose').addEventListener('click', () => setTradeSheet(false));
   document.getElementById('tradeSheetBackdrop').addEventListener('click', () => setTradeSheet(false));
   document.getElementById('trainerNext').addEventListener('click', trainerStep);
-  document.getElementById('trainerReveal').addEventListener('click', () => revealTrainer(false));
   document.getElementById('trainerQuit').addEventListener('click', quitTrainer);
   document.getElementById('trainerEnd').addEventListener('click', endTrainer);
   document.getElementById('trainerAgain').addEventListener('click', () => {
