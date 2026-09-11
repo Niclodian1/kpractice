@@ -77,9 +77,11 @@ function ensureCharts(){
     const oh = document.getElementById('legendOhlc');
     const ch = document.getElementById('legendChg');
     const dt = document.getElementById('legendDate');
+    const dist = document.getElementById('legendDist');
     const d = param.seriesData && param.seriesData.get(candleSeries);
     if (!param.time || !d){
       oh.textContent = '—'; ch.textContent = ''; dt.textContent = '—';
+      if (dist) dist.textContent = '';
       return;
     }
     dt.textContent = fmtTime(d.time);
@@ -91,6 +93,20 @@ function ensureCharts(){
       ch.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
       ch.style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
     } else ch.textContent = '';
+    const last = cs.length ? cs[cs.length - 1] : null;
+    if (dist && last){
+      let px = d.close;
+      if (param.point){
+        const p = candleSeries.coordinateToPrice(param.point.y);
+        if (p != null) px = p;
+      }
+      const dp = px - last.close;
+      const dd = Math.abs(dp) >= 1 ? 2 : Math.abs(dp) >= 0.01 ? 4 : 8;
+      const pp = last.close ? dp / last.close * 100 : 0;
+      const nb = cs.length - 1 - (i ?? cs.length - 1);
+      dist.textContent = `距最新 ${dp >= 0 ? '+' : ''}${dp.toFixed(dd)} (${pp >= 0 ? '+' : ''}${pp.toFixed(2)}%)${nb ? ` · ${nb}根` : ''}`;
+      dist.style.color = dp >= 0 ? 'var(--up)' : 'var(--down)';
+    } else if (dist) dist.textContent = '';
   });
 }
 

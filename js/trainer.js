@@ -139,7 +139,7 @@ function trainerStep(){
   TR.step++;
   if (TR.step >= TR.maxStep){ revealTrainer(true); return; }
   updateTrainerUI();
-  lockViewport();
+  keepNowInView();
 }
 
 function revealTrainer(auto, note){
@@ -183,6 +183,7 @@ function quitTrainer(){
   for (const p of positions) acctAdj(posCapital(p));
   positions = [];
   TR.endCapital = acctBal();
+  TR.endReason = '放弃';
   archiveSession('放弃');
   endTrainer();
   toast('已放弃本局（未计入统计）');
@@ -258,6 +259,7 @@ function archiveSession(cond){
     endCapital: +endCap.toFixed(2),
     pnl: +(endCap - cap0).toFixed(2),
     cond,
+    reason: TR.endReason || cond,
     trades: TR.session.slice(),
   };
   let arr = tsLoad();
@@ -284,7 +286,7 @@ function renderTrainerSessions(){
     return `<div class="ts-item" data-tsid="${s.id}">
       <div class="ts-head" data-toggle="1">
         <span>${new Date(s.ts).toLocaleString('zh-CN', { hour12:false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })} · ${s.sym || '?'} ${s.tf || ''}</span>
-        <span>${groupTradesByPid(s.trades || []).length}笔 · <b style="color:${col}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b> ${condTag}</span>
+        <span>${groupTradesByPid(s.trades || []).length}笔 · ${s.steps != null ? s.steps + '根' : ''} · ${s.reason || s.cond} · <b style="color:${col}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b> ${condTag}</span>
       </div>
       <div class="ts-detail" hidden>
         <div>本金 ${s.capital.toLocaleString()}U → 终值 <b>${s.endCapital.toLocaleString()}U</b> · 步数 ${s.steps}</div>

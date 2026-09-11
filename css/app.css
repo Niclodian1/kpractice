@@ -182,6 +182,7 @@ input, select, textarea {
 .legend-date { color: var(--muted); }
 .legend-ohlc { color: var(--ink-2); }
 .legend-chg { font-weight: 700; }
+.legend-dist { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .chart-tools-right {
   display: flex;
