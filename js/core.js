@@ -129,13 +129,7 @@ function macdFor(){
   return { diff: m.diff.slice(cut), dea: m.dea.slice(cut), hist: m.hist.slice(cut) };
 }
 
-function toast(msg){
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), 1800);
-}
+function toast(_msg){}
 function setLoading(on, text){
   const el = document.getElementById('loading');
   el.hidden = !on;

@@ -1,9 +1,5 @@
 "use strict";
 
-function isStandalone(){
-  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-}
-
 async function prefetchAll(){
   const list = CATALOG.symbols || [];
   const btn = document.getElementById('prefetchBtn');
@@ -39,7 +35,7 @@ function setupChrome(){
     document.querySelector('meta[name="theme-color"]').setAttribute('content', next === 'dark' ? '#0d0d0d' : '#f4f3ef');
     applyTheme();
   });
-  document.getElementById('maPeriods').addEventListener('change', () => { rebuildMA(); toast('MA 已更新'); });
+  document.getElementById('maPeriods').addEventListener('change', () => { rebuildMA(); });
   document.getElementById('maComma').addEventListener('click', () => {
     const el = document.getElementById('maPeriods');
     const start = el.selectionStart ?? el.value.length;
@@ -65,9 +61,6 @@ function setupChrome(){
     }
   });
   document.getElementById('prefetchBtn').addEventListener('click', prefetchAll);
-  if (!isStandalone()){
-    document.getElementById('installHint').hidden = false;
-  }
 }
 
 async function registerSW(){

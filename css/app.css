@@ -331,17 +331,6 @@ input, select, textarea {
 .trainer-bar .btn { flex: 1; padding: 10px 8px; min-height: 44px; }
 .trainer-bar .btn.primary { width: auto; }
 
-#toast {
-  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom));
-  transform: translateX(-50%) translateY(12px);
-  background: var(--ink); color: var(--surface);
-  padding: 8px 14px; border-radius: 8px; font-size: 13px;
-  opacity: 0; pointer-events: none; z-index: 80;
-  transition: opacity .18s ease, transform .18s ease;
-  max-width: 86%;
-}
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
 #loading {
   position: fixed; inset: 0; z-index: 90;
   background: color-mix(in srgb, var(--plane) 72%, transparent);
