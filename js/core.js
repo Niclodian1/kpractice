@@ -32,6 +32,7 @@ const TR = {
   maxStep: 200,
   LOOKBACK: 200,
   session: [],
+  curve: [],
 };
 const trLocked = () => TR.active && !TR.revealed;
 

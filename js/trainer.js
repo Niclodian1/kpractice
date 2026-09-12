@@ -96,7 +96,7 @@ async function enterTrainer(){
       const tf = tfSel || tfs[randInt(tfs.length)];
       const candles = DATA.levels[tf].candles;
       const len = candles.length;
-      TR.step = 0; TR.session = []; TR.revealed = false; TR.active = true;
+      TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: INIT_CAPITAL }]; TR.revealed = false; TR.active = true;
       TR.startWallTs = Date.now();
       TR.endCapital = INIT_CAPITAL;
       acctReset();
@@ -112,6 +112,7 @@ async function enterTrainer(){
       trainerChartLock(true);
       document.getElementById('trainerBanner').style.display = 'none';
       enterReplay(TR.startTs);
+      recordEquity();
       updateTrainerUI();
       requestAnimationFrame(() => { applySeries(); lockViewport(); alignPanes(); });
       return;
@@ -138,16 +139,18 @@ function trainerStep(){
   stepReplay(1);
   TR.step++;
   if (TR.step >= TR.maxStep){ revealTrainer(true); return; }
+  recordEquity();
   updateTrainerUI();
   keepNowInView();
 }
 
 function revealTrainer(auto, note){
   if (!TR.active || TR.revealed) return;
-  while (positions.length) closePosObj(positions[0], 1, auto ? '步数走满, 按现价强平' : '结束练习, 按现价强平', undefined, true);
+  while (positions.length) closePosObj(positions[0], 1, auto ? '步数走满, 按现价强平' : '结束练习, 按现价强平', undefined, true, { silent: true });
   const endCapital = acctBal();
   TR.endReason = (note && String(note).includes('爆仓')) ? '账户爆仓'
     : (auto ? '步数走满' : '结束练习');
+  recordEquity();
   TR.revealed = true;
   stopPlay();
   replayT = null;
@@ -164,7 +167,7 @@ function revealTrainer(auto, note){
 }
 
 function endTrainer(){
-  TR.active = false; TR.revealed = false; TR.session = []; TR.startTs = null;
+  TR.active = false; TR.revealed = false; TR.session = []; TR.curve = []; TR.startTs = null;
   replayT = null;
   trainerChartLock(false);
   applyBlind(false);
@@ -198,7 +201,8 @@ function showAnswerBanner(){
   el.innerHTML =
     `<b>本局答案：${DATA.meta.symbol} · ${TR.tf}</b>` +
     `<span>起点 <b>${fmtTimeReal(TR.startTs)}</b> · 走了 ${TR.step} 根 · ${TR.endReason || '—'}</span>` +
-    `<span>开单 <b>${n}</b> 笔 · 净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</b></span>`;
+    `<span>开单 <b>${n}</b> 笔 · 净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</b></span>` +
+    equitySparkSvg(TR.curve);
   el.style.display = 'flex';
 }
 
@@ -260,6 +264,7 @@ function archiveSession(cond){
     cond,
     reason: TR.endReason || cond,
     trades: TR.session.slice(),
+    curve: (TR.curve || []).slice(),
   };
   let arr = tsLoad();
   arr.unshift(s);
@@ -289,6 +294,7 @@ function renderTrainerSessions(){
       </div>
       <div class="ts-detail" hidden>
         <div>本金 ${s.capital.toLocaleString()}U → 终值 <b>${s.endCapital.toLocaleString()}U</b> · 步数 ${s.steps}</div>
+        ${equitySparkSvg(s.curve)}
         ${(() => {
           const trades = groupTradesByPid(s.trades || []);
           return trades.length ? '<table><tr style="opacity:.6"><td>时间</td><td>方向</td><td>入场→出场</td><td style="text-align:right">盈亏U</td></tr>' +

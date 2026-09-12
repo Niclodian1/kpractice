@@ -95,6 +95,35 @@ function syncMarginInput(){
   const bal = acctBal();
   el.value = bal > 0 ? String(+bal.toFixed(2)) : '0';
 }
+function recordEquity(){
+  if (!TR.active || TR.revealed) return;
+  const eq = +acctEquity().toFixed(2);
+  if (!Array.isArray(TR.curve)) TR.curve = [];
+  const last = TR.curve[TR.curve.length - 1];
+  if (last && last.step === TR.step) last.eq = eq;
+  else TR.curve.push({ step: TR.step, eq });
+}
+function equitySparkSvg(curve, w, h){
+  w = w || 280; h = h || 56;
+  if (!curve || curve.length < 2) return '';
+  const ys = curve.map(p => p.eq);
+  const min = Math.min(...ys, INIT_CAPITAL);
+  const max = Math.max(...ys, INIT_CAPITAL);
+  const span = max - min || 1;
+  const n = curve.length;
+  const pts = curve.map((p, i) => {
+    const x = n === 1 ? w / 2 : i / (n - 1) * w;
+    const y = h - (p.eq - min) / span * (h - 6) - 3;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  const last = ys[ys.length - 1];
+  const col = last >= INIT_CAPITAL ? 'var(--up)' : 'var(--down)';
+  const y0 = h - (INIT_CAPITAL - min) / span * (h - 6) - 3;
+  return `<svg class="eq-spark" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">
+    <line x1="0" y1="${y0.toFixed(1)}" x2="${w}" y2="${y0.toFixed(1)}" stroke="var(--border)" stroke-dasharray="4 3"/>
+    <polyline fill="none" stroke="${col}" stroke-width="1.7" points="${pts}"/>
+  </svg>`;
+}
 
 function renderJournal(){
   const box = document.getElementById('jPositions');
@@ -112,6 +141,8 @@ function renderJournal(){
     可用 <b data-abal>${acctBal().toFixed(2)}U</b> · 占用 <span data-aused>${used.toFixed(0)}</span>U<br>
     浮动 <span data-fsum style="font-weight:700;color:${floatSum >= 0 ? 'var(--up)' : 'var(--down)'}">${floatSum >= 0 ? '+' : ''}${floatSum.toFixed(2)}U</span>
     · 净值 <b data-aeq style="color:${eqCol}">${eq.toFixed(2)}U</b>
+    ${positions.length ? '<button class="btn" data-act="close-all" type="button" style="margin-top:6px;width:100%;">一键全平</button>' : ''}
+    ${equitySparkSvg(TR.curve)}
   </div>`;
   for (const pos of positions){
     const ok = posLayoutOk(pos);
@@ -130,6 +161,7 @@ function renderJournal(){
         `<span style="opacity:.72">${i + 1}) ${e.price} · ${e.leverage}x · ${e.capital}U · ${fmtLogic(e.logic)}</span>`
       ).join('<br>')}
       <div class="row-btns" style="margin-top:8px;">
+        <button class="btn primary" data-act="add-one" data-pid="${pos.id}" type="button">一键加仓</button>
         <button class="btn" data-act="add-toggle" data-pid="${pos.id}" type="button">加仓</button>
         <button class="btn" data-act="close-toggle" data-pid="${pos.id}" type="button">平仓</button>
       </div>
@@ -219,7 +251,7 @@ function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
   };
 }
 
-function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false){
+function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false, opts = {}){
   if (!force && !posLayoutOk(pos)){
     alert(`该持仓绑定 ${pos.sym} ${pos.tf}，请在本局内结算。`);
     return false;
@@ -232,10 +264,47 @@ function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false){
   acctAdj(posCapital(pos) * r + pnl);
   if (r >= 1) positions = positions.filter(p => p !== pos);
   else pos.entries.forEach(e => { e.capital = +(e.capital * (1 - r)).toFixed(6); });
+  if (!opts.silent){
+    renderJournal();
+    syncMarginInput();
+    refreshAll({ light: true });
+    recordEquity();
+    updateTrainerUI();
+  }
+  return true;
+}
+function addMaxFloat(pos){
+  if (!inReplay()){ alert('请先开始练习'); return; }
+  if (!posLayoutOk(pos)){ alert(`该持仓绑定 ${pos.sym} ${pos.tf}`); return; }
+  const bar = curBar();
+  if (!bar) return;
+  const bd = addBudget(pos);
+  if (bd.avail <= 0){
+    alert(bd.u <= 0 ? '本笔暂无浮盈，无法加仓' : '浮盈已全部用于加仓');
+    return;
+  }
+  pos.entries.push({
+    t: bar.time,
+    price: bar.close,
+    capital: +bd.avail.toFixed(2),
+    leverage: pos.entries[pos.entries.length - 1].leverage,
+    logic: '浮盈加仓',
+  });
+  renderJournal();
+  refreshAll({ light: true });
+  recordEquity();
+  updateTrainerUI();
+}
+function closeAllPositions(){
+  const mine = positions.filter(p => posLayoutOk(p));
+  if (!mine.length){ alert('没有可平持仓'); return; }
+  for (const pos of [...mine])
+    closePosObj(pos, 1, '一键全平', '一键全平', false, { silent: true });
   renderJournal();
   syncMarginInput();
   refreshAll({ light: true });
-  return true;
+  recordEquity();
+  updateTrainerUI();
 }
 
 function checkStopAndLiquidate(){
@@ -261,6 +330,7 @@ function checkStopAndLiquidate(){
   if (changed){
     renderJournal();
     syncMarginInput();
+    recordEquity();
   }
 }
 
@@ -336,12 +406,17 @@ function setupJournal(){
     syncMarginInput();
     refreshAll({ light: true });
     setTradeSheet(true);
+    recordEquity();
     updateTrainerUI();
   });
 
   document.getElementById('jPositions').addEventListener('click', e => {
     const b = e.target.closest('button[data-act]');
     if (!b) return;
+    if (b.dataset.act === 'close-all'){
+      closeAllPositions();
+      return;
+    }
     const card = b.closest('.pos-card');
     const pos = card ? posById(+card.dataset.pid) : null;
     if (!pos) return;
@@ -351,6 +426,9 @@ function setupJournal(){
       if (secName) q(secName).style.display = 'flex';
     };
     switch (b.dataset.act){
+      case 'add-one':
+        addMaxFloat(pos);
+        break;
       case 'add-toggle': {
         const bd = addBudget(pos);
         if (bd.avail <= 0){
@@ -386,6 +464,7 @@ function setupJournal(){
         if (ns) pos.stop = +ns;
         renderJournal();
         refreshAll({ light: true });
+        recordEquity();
         break;
       }
       case 'close-ok': {

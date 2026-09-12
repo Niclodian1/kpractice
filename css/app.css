@@ -303,8 +303,10 @@ input, select, textarea {
   margin-top: 8px;
   font-size: 12px;
 }
-.pos-card .row-btns { flex-direction: row; }
-.pos-card .btn { flex: 1; min-height: 40px; }
+.pos-card .row-btns { flex-direction: row; flex-wrap: wrap; }
+.pos-card .btn { flex: 1; min-height: 40px; width: auto; }
+.pos-card .btn.primary { width: auto; }
+.eq-spark { display: block; margin-top: 8px; }
 
 .trainer-bar {
   display: flex;
