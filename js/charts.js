@@ -60,6 +60,8 @@ function ensureCharts(){
     lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
   });
   macdHistSeries.priceScale().applyOptions({ scaleMargins: { top: 0.25, bottom: 0.05 } });
+  attachDrawOverlay();
+  setupDrawing();
 
   const syncAll = r => {
     if (!r) return;
@@ -194,6 +196,7 @@ function applySeries(){
   macdSignalSeries.setData(md.dea);
   buildMaps();
   rebuildMA();
+  refreshDrawOverlay();
 }
 
 function applyTheme(){
@@ -209,18 +212,210 @@ function applyTheme(){
   macdLineSeries.applyOptions({ color: t().ink2 });
   macdSignalSeries.applyOptions({ color: t().muted });
   applySeries();
+  refreshDrawOverlay();
   requestAnimationFrame(alignPanes);
 }
 
+let drawTool = 'none';
+let drawPending = null;
+const drawnLines = [];
+let drawRecs = [];
+let drawOverlayPrim = null;
+const refreshDrawOverlay = () => { if (drawOverlayPrim && drawOverlayPrim._req) drawOverlayPrim._req(); };
+
+function applyChartGestures(){
+  if (!chart) return;
+  const pan = drawTool === 'none';
+  const o = { handleScroll: pan, handleScale: pan };
+  chart.applyOptions(o); volumeChart.applyOptions(o); macdChart.applyOptions(o);
+}
 function trainerChartLock(on){
   if (!chart) return;
-  // 练习中允许缩放/平移, 数据层已切掉窗口外K线, 视口再夹在 [0, n+pad]
-  const o = { handleScroll: true, handleScale: true };
-  chart.applyOptions(o); volumeChart.applyOptions(o); macdChart.applyOptions(o);
+  applyChartGestures();
   chart.timeScale().applyOptions({
     tickMarkFormatter: on
       ? (ts => trLabel(typeof ts === 'object' && ts != null ? (ts.time ?? ts) : ts))
       : undefined,
+  });
+}
+
+function timeToX(t){
+  const ts = chart.timeScale();
+  const x = ts.timeToCoordinate(t);
+  if (x != null) return x;
+  const cs = candlesFor();
+  if (!cs.length) return null;
+  if (cs.length === 1) return ts.timeToCoordinate(cs[0].time);
+  const tF = cs[0].time, tS = cs[1].time, tL = cs[cs.length - 1].time, tP = cs[cs.length - 2].time;
+  const xF = ts.timeToCoordinate(tF), xS = ts.timeToCoordinate(tS);
+  const xL = ts.timeToCoordinate(tL), xP = ts.timeToCoordinate(tP);
+  if (xF == null || xL == null) return null;
+  if (t >= tL && xP != null && tL !== tP) return xL + (t - tL) / (tL - tP) * (xL - xP);
+  if (t <= tF && xS != null && tS !== tF) return xF + (t - tF) / (tS - tF) * (xS - xF);
+  return xF + (t - tF) / (tL - tF) * (xL - xF);
+}
+function xToTime(x){
+  const t0 = chart.timeScale().coordinateToTime(x);
+  if (t0 != null) return t0;
+  const cs = candlesFor();
+  if (cs.length < 2) return cs[0] ? cs[0].time : null;
+  const tF = cs[0].time, tL = cs[cs.length - 1].time;
+  const xF = chart.timeScale().timeToCoordinate(tF);
+  const xL = chart.timeScale().timeToCoordinate(tL);
+  if (xF == null || xL == null || xL === xF) return t0;
+  return tF + (x - xF) / (xL - xF) * (tL - tF);
+}
+function cursorPrice(y){ return candleSeries.coordinateToPrice(y); }
+function drawPx(p){
+  const a = Math.abs(p);
+  const d = a >= 1 ? 2 : a >= 0.01 ? 4 : 8;
+  return +Number(p).toFixed(d);
+}
+function setDrawHint(s){
+  const el = document.getElementById('drawHint');
+  if (el) el.textContent = s || '';
+}
+function addDrawnLine(rec){
+  if (rec.type !== 'sandr' || !candleSeries) return;
+  const s = candleSeries.createPriceLine({
+    price: rec.p, color: rec.color || '#f5a623', lineWidth: 1.6,
+    lineStyle: LightweightCharts.LineStyle.Dashed,
+    axisLabelVisible: true, title: '阻/支',
+  });
+  drawnLines.push({ type: 'sandr', series: s });
+}
+function clearDrawings(){
+  drawRecs = [];
+  drawPending = null;
+  window._pendingTrend = null;
+  window._trendLines = [];
+  while (drawnLines.length){
+    const l = drawnLines.pop();
+    try { candleSeries.removePriceLine(l.series); } catch {}
+  }
+  refreshDrawOverlay();
+  setDrawHint('');
+}
+function attachDrawOverlay(){
+  if (drawOverlayPrim || !candleSeries) return;
+  class DrawRenderer {
+    constructor(prim){ this._prim = prim; }
+    draw(target){
+      const series = this._prim._series;
+      target.useMediaCoordinateSpace(scope => {
+        const ctx = scope.context;
+        ctx.lineCap = 'round';
+        const X = t0 => timeToX(t0);
+        const Y = p => series.priceToCoordinate(p);
+        const trends = window._trendLines || [];
+        ctx.lineWidth = 2;
+        for (const r of trends){
+          const x1 = X(r.t1), y1 = Y(r.p1), x2 = X(r.t2), y2 = Y(r.p2);
+          if (x1 == null || x2 == null || y1 == null || y2 == null) continue;
+          ctx.strokeStyle = r.color || '#4a90d9';
+          ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+          ctx.fillStyle = r.color || '#4a90d9';
+          ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(x2, y2, 3, 0, Math.PI * 2); ctx.fill();
+        }
+        const pend = window._pendingTrend;
+        if (pend){
+          const qx1 = X(pend.t1), qy1 = Y(pend.p1), qx2 = X(pend.t2), qy2 = Y(pend.p2);
+          if (qx1 != null && qy1 != null && qx2 != null && qy2 != null){
+            ctx.lineWidth = 2; ctx.strokeStyle = pend.color || '#4a90d9';
+            ctx.globalAlpha = 0.85; ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.moveTo(qx1, qy1); ctx.lineTo(qx2, qy2); ctx.stroke();
+            ctx.setLineDash([]); ctx.fillStyle = pend.color || '#4a90d9';
+            ctx.beginPath(); ctx.arc(qx2, qy2, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+        }
+      });
+    }
+  }
+  class DrawView {
+    constructor(prim){ this._prim = prim; this._renderer = new DrawRenderer(prim); }
+    update(){}
+    renderer(){ return this._renderer; }
+  }
+  class DrawPrimitive {
+    constructor(series, ch){ this._series = series; this._chart = ch; this._view = new DrawView(this); this._req = null; }
+    attached(p){ this._req = p.requestUpdate; }
+    updateAllViews(){}
+    paneViews(){ return [this._view]; }
+  }
+  drawOverlayPrim = new DrawPrimitive(candleSeries, chart);
+  candleSeries.attachPrimitive(drawOverlayPrim);
+}
+function setupDrawing(){
+  if (setupDrawing._ok) return;
+  setupDrawing._ok = true;
+  document.querySelectorAll('#drawToggle button').forEach(b =>
+    b.addEventListener('click', () => {
+      drawTool = b.dataset.tool;
+      document.querySelectorAll('#drawToggle button').forEach(x => x.classList.toggle('active', x === b));
+      drawPending = null;
+      window._pendingTrend = null;
+      refreshDrawOverlay();
+      applyChartGestures();
+      setDrawHint(drawTool === 'trend' ? '点两个点画趋势线' : (drawTool === 'sandr' ? '点一下画水平线' : ''));
+    }));
+  document.getElementById('drawClear').addEventListener('click', () => {
+    clearDrawings();
+    drawTool = 'none';
+    document.querySelectorAll('#drawToggle button').forEach(x =>
+      x.classList.toggle('active', x.dataset.tool === 'none'));
+    applyChartGestures();
+  });
+  const chartEl = document.getElementById('chart');
+  let downPos = null;
+  const pick = (clientX, clientY) => {
+    const rect = chartEl.getBoundingClientRect();
+    const cx = clientX - rect.left, cy = clientY - rect.top;
+    let axisW = 60;
+    try { axisW = chart.priceScale('right').width(); } catch {}
+    if (cx >= chartEl.clientWidth - axisW) return null;
+    const tRaw = xToTime(cx), pRaw = cursorPrice(cy);
+    if (tRaw == null || pRaw == null) return null;
+    return { t: tRaw, p: drawPx(pRaw) };
+  };
+  chartEl.addEventListener('pointerdown', e => {
+    if (drawTool === 'none') return;
+    downPos = { x: e.clientX, y: e.clientY };
+  });
+  chartEl.addEventListener('pointermove', e => {
+    if (drawTool !== 'trend' || !drawPending) return;
+    const pt = pick(e.clientX, e.clientY);
+    if (!pt) return;
+    window._pendingTrend = { t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#4a90d9' };
+    refreshDrawOverlay();
+  });
+  chartEl.addEventListener('pointerup', e => {
+    if (drawTool === 'none' || !downPos) return;
+    if (Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y) > 8){ downPos = null; return; }
+    downPos = null;
+    const pt = pick(e.clientX, e.clientY);
+    if (!pt) return;
+    if (drawTool === 'sandr'){
+      const rec = { type: 'sandr', p: pt.p, color: '#f5a623' };
+      drawRecs.push(rec);
+      addDrawnLine(rec);
+      setDrawHint('水平线 ' + pt.p);
+    } else if (drawTool === 'trend'){
+      if (!drawPending){
+        drawPending = pt;
+        setDrawHint('再点终点');
+      } else {
+        const rec = { type: 'trend', t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#4a90d9' };
+        drawRecs.push(rec);
+        window._trendLines = drawRecs.filter(r => r.type === 'trend');
+        drawPending = null;
+        window._pendingTrend = null;
+        refreshDrawOverlay();
+        setDrawHint('');
+      }
+    }
   });
 }
 

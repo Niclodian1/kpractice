@@ -97,6 +97,7 @@ async function enterTrainer(){
       const candles = DATA.levels[tf].candles;
       const len = candles.length;
       TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: INIT_CAPITAL }]; TR.revealed = false; TR.active = true;
+      if (typeof clearDrawings === 'function') clearDrawings();
       TR.startWallTs = Date.now();
       TR.endCapital = INIT_CAPITAL;
       acctReset();
@@ -196,12 +197,15 @@ function showAnswerBanner(){
   const el = document.getElementById('trainerBanner');
   const grouped = groupTradesByPid(TR.session);
   const n = grouped.length;
-  const tot = grouped.reduce((a, r) => a + r.pnl_u, 0);
-  const pct = grouped.reduce((a, r) => a + (r.pnl_pct_capital || 0), 0);
+  const cap0 = INIT_CAPITAL;
+  const endCap = typeof TR.endCapital === 'number' ? TR.endCapital : acctBal();
+  const tot = +(endCap - cap0).toFixed(2);
+  const pct = cap0 ? tot / cap0 * 100 : 0;
   el.innerHTML =
     `<b>本局答案：${DATA.meta.symbol} · ${TR.tf}</b>` +
     `<span>起点 <b>${fmtTimeReal(TR.startTs)}</b> · 走了 ${TR.step} 根 · ${TR.endReason || '—'}</span>` +
-    `<span>开单 <b>${n}</b> 笔 · 净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</b></span>` +
+    `<span>开单 <b>${n}</b> 笔 · 本金 ${cap0.toLocaleString()}U → ${endCap.toLocaleString()}U</span>` +
+    `<span>净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U（本金 ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%）</b></span>` +
     equitySparkSvg(TR.curve);
   el.style.display = 'flex';
 }

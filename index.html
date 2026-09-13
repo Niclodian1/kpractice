@@ -95,6 +95,15 @@
         </div>
       </div>
     </div>
+    <div class="chart-toolbar draw-bar">
+      <div class="seg" id="drawToggle">
+        <button type="button" data-tool="none" class="active">画线关</button>
+        <button type="button" data-tool="trend">趋势线</button>
+        <button type="button" data-tool="sandr">水平线</button>
+      </div>
+      <button class="btn" id="drawClear" type="button">清线</button>
+      <span id="drawHint" class="draw-hint"></span>
+    </div>
     <div class="chart-box">
       <div id="chart"></div>
       <div id="volume"></div>

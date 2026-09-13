@@ -1,4 +1,4 @@
-const CACHE = 'kpractice-v7';
+const CACHE = 'kpractice-v8';
 const SHELL = [
   './',
   './index.html',
