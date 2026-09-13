@@ -24,6 +24,9 @@ function curBar(){
   return cs.length ? cs[cs.length - 1] : null;
 }
 const posCapital = pos => pos.entries.reduce((a, e) => a + e.capital, 0);
+// 现金保证金=首笔开仓从余额划扣的部分; 其后加仓只允许用本笔浮盈, 从未扣过余额。
+const posCashCapital = pos => pos.entries.length ? pos.entries[0].capital : 0;
+const posFloatAddCapital = pos => pos.entries.slice(1).reduce((a, e) => a + e.capital, 0);
 function posAvgEntry(pos){
   const nv = pos.entries.reduce((a, e) => a + e.price * e.capital * e.leverage, 0);
   const dn = pos.entries.reduce((a, e) => a + e.capital * e.leverage, 0);
@@ -46,9 +49,11 @@ function addBudget(pos){
 const acctEquity = () => {
   const bar = curBar();
   const cur = positions.filter(p => posLayoutOk(p));
-  const used = cur.reduce((a, p) => a + posCapital(p), 0);
+  // 净值 = 可用现金 + 已扣现金保证金 + 浮动盈亏。
+  // 浮盈加仓的保证金来自 float, 若再计入 used 会与 floatPnl 重复, 虚增净值。
+  const cashUsed = cur.reduce((a, p) => a + posCashCapital(p), 0);
   const floatPnl = bar ? cur.reduce((a, p) => a + pnlOf(p, bar.close), 0) : 0;
-  return acctBal() + used + floatPnl;
+  return acctBal() + cashUsed + floatPnl;
 };
 
 const POS_COLORS = ['#f5a623', '#4a90d9', '#b45cd6', '#2fbf8f', '#e05c78', '#8a9299'];
@@ -133,12 +138,14 @@ function renderJournal(){
   document.getElementById('jOpen').disabled = !inReplay();
   const bar = curBar();
   let html = '';
-  const floatSum = bar ? positions.filter(p => posLayoutOk(p)).reduce((a, p) => a + pnlOf(p, bar.close), 0) : 0;
-  const used = positions.filter(p => posLayoutOk(p)).reduce((a, p) => a + posCapital(p), 0);
-  const eq = acctBal() + used + floatSum;
+  const mine = positions.filter(p => posLayoutOk(p));
+  const floatSum = bar ? mine.reduce((a, p) => a + pnlOf(p, bar.close), 0) : 0;
+  const cashUsed = mine.reduce((a, p) => a + posCashCapital(p), 0);
+  const addUsed = mine.reduce((a, p) => a + posFloatAddCapital(p), 0);
+  const eq = acctEquity();
   const eqCol = eq > INIT_CAPITAL ? 'var(--up)' : (eq < INIT_CAPITAL ? 'var(--down)' : 'var(--ink-2)');
   html += `<div data-acct style="border:1px dashed var(--border);border-radius:8px;padding:8px;margin-top:6px;font-size:12px;">
-    可用 <b data-abal>${acctBal().toFixed(2)}U</b> · 占用 <span data-aused>${used.toFixed(0)}</span>U<br>
+    可用 <b data-abal>${acctBal().toFixed(2)}U</b> · 占用 <span data-aused>${cashUsed.toFixed(0)}</span>U${addUsed ? ` · 浮盈加仓 ${addUsed.toFixed(0)}U` : ''}<br>
     浮动 <span data-fsum style="font-weight:700;color:${floatSum >= 0 ? 'var(--up)' : 'var(--down)'}">${floatSum >= 0 ? '+' : ''}${floatSum.toFixed(2)}U</span>
     · 净值 <b data-aeq style="color:${eqCol}">${eq.toFixed(2)}U</b>
     ${positions.length ? '<button class="btn" data-act="close-all" type="button" style="margin-top:6px;width:100%;">一键全平</button>' : ''}
@@ -197,13 +204,13 @@ function updateLivePnl(){
   if (balEl){
     const mine = positions.filter(p => posLayoutOk(p));
     const floatSum = mine.reduce((a, p) => a + pnlOf(p, bar.close), 0);
-    const used = mine.reduce((a, p) => a + posCapital(p), 0);
-    const eq = acctBal() + used + floatSum;
+    const cashUsed = mine.reduce((a, p) => a + posCashCapital(p), 0);
+    const eq = acctBal() + cashUsed + floatSum;
     const fsEl = document.querySelector('[data-fsum]');
     const eqEl = document.querySelector('[data-aeq]');
     const usEl = document.querySelector('[data-aused]');
     balEl.textContent = acctBal().toFixed(2) + 'U';
-    if (usEl) usEl.textContent = used.toFixed(0);
+    if (usEl) usEl.textContent = cashUsed.toFixed(0);
     if (fsEl){
       fsEl.textContent = (floatSum >= 0 ? '+' : '') + floatSum.toFixed(2) + 'U';
       fsEl.style.color = floatSum >= 0 ? 'var(--up)' : 'var(--down)';
@@ -231,7 +238,7 @@ function updateLivePnl(){
 }
 
 function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
-  const capClosed = posCapital(pos) * r;
+  const capClosed = posCashCapital(pos) * r;
   return {
     symbol: DATA.meta.symbol, tf: activeTF,
     mode: TR.active && !TR.revealed ? 'trainer' : 'replay',
@@ -261,7 +268,7 @@ function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false, 
   const pnl = pnlOf(pos, bar.close) * r;
   const rec = makeRec(pos, r, bar.close, bar.time, pnl, exitLogic, reason);
   if (TR.active && !TR.revealed) TR.session.push(rec);
-  acctAdj(posCapital(pos) * r + pnl);
+  acctAdj(posCashCapital(pos) * r + pnl);
   if (r >= 1) positions = positions.filter(p => p !== pos);
   else pos.entries.forEach(e => { e.capital = +(e.capital * (1 - r)).toFixed(6); });
   if (!opts.silent){
@@ -283,6 +290,8 @@ function addMaxFloat(pos){
     alert(bd.u <= 0 ? '本笔暂无浮盈，无法加仓' : '浮盈已全部用于加仓');
     return;
   }
+  // 加仓本金来自本笔浮盈, 不能 acctAdj(-cap): 余额可能为 0。
+  // 也绝不能把它当成新的现金保证金, 否则净值 = 余额+占用+浮动 会把浮盈计两次。
   pos.entries.push({
     t: bar.time,
     price: bar.close,
@@ -314,6 +323,7 @@ function checkStopAndLiquidate(){
   let changed = false;
   for (const pos of mine){
     const cap = posCapital(pos);
+    const cash = posCashCapital(pos);
     const hitStop = pos.stop != null &&
       ((pos.side === '多' && bar.low <= pos.stop) ||
        (pos.side === '空' && bar.high >= pos.stop));
@@ -321,9 +331,9 @@ function checkStopAndLiquidate(){
     if (!hitStop && !liq) continue;
     const px = hitStop ? pos.stop : bar.close;
     const pnl = hitStop ? pnlOf(pos, pos.stop) : -cap;
-    const rec = makeRec(pos, 1, px, bar.time, Math.max(pnl, -cap), '', hitStop ? '触发止损' : '单笔爆仓');
+    const rec = makeRec(pos, 1, px, bar.time, Math.max(pnl, -cash), '', hitStop ? '触发止损' : '单笔爆仓');
     if (TR.active && !TR.revealed) TR.session.push(rec);
-    acctAdj(cap + Math.max(pnl, -cap));
+    acctAdj(cash + Math.max(pnl, -cash));
     positions = positions.filter(p => p !== pos);
     changed = true;
   }

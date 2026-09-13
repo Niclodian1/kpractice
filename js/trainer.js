@@ -184,7 +184,7 @@ function quitTrainer(){
   if (!TR.active) return;
   if (TR.revealed){ endTrainer(); return; }
   if (!confirm('放弃本次练习? 未平仓仓位退还保证金；本局标记为「放弃」')) return;
-  for (const p of positions) acctAdj(posCapital(p));
+  for (const p of positions) acctAdj(posCashCapital(p));
   positions = [];
   TR.endCapital = acctBal();
   TR.endReason = '放弃';
