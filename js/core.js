@@ -77,7 +77,7 @@ function displayRange(){
   const n = lv.candles.length;
   const lo = Math.max(0, TR.startIdx - TR.LOOKBACK);
   if (TR.revealed){
-    return { lo, hi: Math.min(n, TR.startIdx + TR.maxStep + 1) };
+    return { lo, hi: Math.min(n, TR.startIdx + TR.step + 1) };
   }
   let pos = TR.startIdx;
   if (replayT != null){
@@ -130,7 +130,17 @@ function macdFor(){
   return { diff: m.diff.slice(cut), dea: m.dea.slice(cut), hist: m.hist.slice(cut) };
 }
 
-function toast(_msg){}
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  if (!el) return;
+  clearTimeout(toastTimer);
+  el.textContent = String(msg);
+  el.hidden = false;
+  toastTimer = setTimeout(() => { el.hidden = true; }, 4500);
+}
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function setLoading(on, text){
   const el = document.getElementById('loading');
   el.hidden = !on;

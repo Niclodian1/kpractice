@@ -11,15 +11,15 @@ function chartOptions(){
     layout: {
       background: { type: LightweightCharts.ColorType.Solid, color: T.surface },
       textColor: T.ink2, fontSize: 11, fontFamily: FONT, attributionLogo: false,
-      localization: { timeFormatter: fmtTime },
     },
+    localization: { timeFormatter: fmtTime },
     grid: { vertLines: { color: T.grid }, horzLines: { color: T.grid } },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
       vertLine: { color: T.border, lineStyle: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: T.ink2, labelTextColor: T.surface },
       horzLine: { color: T.border, labelBackgroundColor: T.ink2, labelTextColor: T.surface },
     },
-    rightPriceScale: { borderColor: T.border },
+    rightPriceScale: { borderColor: T.border, minimumWidth: 64 },
     timeScale: { borderColor: T.border, timeVisible: activeTF !== '1D', secondsVisible: false, rightOffset: 3 },
     autoSize: true,
   };
@@ -39,7 +39,7 @@ function ensureCharts(){
     timeScale: { ...chartOptions().timeScale, visible: false },
   });
   volumeSeries = volumeChart.addHistogramSeries({
-    priceFormat: { type: 'volume' }, priceScaleId: '',
+    priceFormat: { type: 'volume' }, priceScaleId: 'right',
     lastValueVisible: false, priceLineVisible: false,
   });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.04 } });
@@ -49,25 +49,28 @@ function ensureCharts(){
     timeScale: { ...chartOptions().timeScale, visible: false },
   });
   macdHistSeries = macdChart.addHistogramSeries({
-    priceScaleId: '', lastValueVisible: false, priceLineVisible: false,
+    priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false,
   });
   macdLineSeries = macdChart.addLineSeries({
-    color: t().ink2, lineWidth: 1, priceScaleId: '',
+    color: t().ink2, lineWidth: 1, priceScaleId: 'right',
     lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
   });
   macdSignalSeries = macdChart.addLineSeries({
-    color: t().muted, lineWidth: 1, priceScaleId: '',
+    color: t().muted, lineWidth: 1, priceScaleId: 'right',
     lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
   });
   macdHistSeries.priceScale().applyOptions({ scaleMargins: { top: 0.25, bottom: 0.05 } });
   attachDrawOverlay();
   setupDrawing();
 
+  let syncing = false;
   const syncAll = r => {
-    if (!r) return;
+    if (!r || syncing) return;
+    syncing = true;
     chart.timeScale().setVisibleLogicalRange(r);
     volumeChart.timeScale().setVisibleLogicalRange(r);
     macdChart.timeScale().setVisibleLogicalRange(r);
+    syncing = false;
   };
   chart.timeScale().subscribeVisibleLogicalRangeChange(syncAll);
   volumeChart.timeScale().subscribeVisibleLogicalRangeChange(syncAll);
@@ -145,7 +148,7 @@ function rebuildMA(){
   periods.forEach((p, i) => {
     const item = maSeries[i];
     item.period = p;
-    item.series.applyOptions({ color: MA_COLORS[i % MA_COLORS.length] });
+    item.series.applyOptions({ color: MA_COLORS[i % MA_COLORS.length], visible: document.querySelector('[data-ov="ma"]').classList.contains('active') });
     const vals = sma(closes, p);
     item.series.setData(cs.map((c, j) => vals[j] != null ? { time: c.time, value: vals[j] } : null).filter(Boolean));
   });
@@ -235,7 +238,7 @@ function trainerChartLock(on){
   chart.timeScale().applyOptions({
     tickMarkFormatter: on
       ? (ts => trLabel(typeof ts === 'object' && ts != null ? (ts.time ?? ts) : ts))
-      : undefined,
+      : (ts => fmtTs(typeof ts === 'number' ? ts : Date.UTC(ts.year, ts.month - 1, ts.day) / 1000, activeTF)),
   });
 }
 
@@ -367,6 +370,7 @@ function setupDrawing(){
     document.querySelectorAll('#drawToggle button').forEach(x =>
       x.classList.toggle('active', x.dataset.tool === 'none'));
     applyChartGestures();
+    savePractice();
   });
   const chartEl = document.getElementById('chart');
   let downPos = null;
@@ -416,6 +420,7 @@ function setupDrawing(){
         setDrawHint('');
       }
     }
+    savePractice();
   });
 }
 
@@ -486,19 +491,12 @@ function enforcePracticeBounds(r){
 
 function alignPanes(){
   if (!chart) return;
-  const Wm = chart.timeScale().width();
-  if (!Wm || Wm < 80) return;
-  const setW = (id, ch) => {
-    const el = document.getElementById(id);
-    if (!el || el.style.display === 'none') return;
-    let ps = 0;
-    try { ps = ch.priceScale('right').width(); } catch { return; }
-    if (!ps || ps < 8) return;
-    const target = Math.max(80, Math.round(Wm + ps));
-    if (Math.abs(el.clientWidth - target) > 1) el.style.width = target + 'px';
-  };
-  setW('volume', volumeChart);
-  setW('macd', macdChart);
+  const charts = [chart, volumeChart, macdChart];
+  const width = Math.max(64, ...charts.map(ch => ch.priceScale('right').width()));
+  for (const ch of charts){
+    if (ch.options().rightPriceScale.minimumWidth !== width) ch.applyOptions({ rightPriceScale: { minimumWidth: width } });
+  }
+  for (const id of ['volume', 'macd']) document.getElementById(id).style.width = '';
 }
 
 function refreshAll(opts = {}){

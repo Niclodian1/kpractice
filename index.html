@@ -25,6 +25,12 @@
   </header>
 
   <section id="homeView" class="view">
+    <div class="card" id="resumeCard" hidden>
+      <h3>上次练习还没结束</h3>
+      <p class="hint" id="resumeInfo"></p>
+      <button class="btn primary" id="resumeBtn" type="button">继续上次练习</button>
+      <button class="btn" id="discardResumeBtn" type="button">删除这局进度</button>
+    </div>
     <div class="card">
       <h3>开始一局</h3>
       <label>品种
@@ -48,7 +54,7 @@
           <option value="1H">1H 小时</option>
         </select>
       </label>
-      <p class="hint">小时 级不提供。4H / 1H 目前仅加密品种有数据。</p>
+      <p class="hint">4H / 1H 目前仅加密品种有数据。</p>
       <label>步数
         <input id="trStepsInput" type="number" inputmode="numeric" value="200" min="20" max="500">
       </label>
@@ -58,19 +64,29 @@
     <div class="card">
       <h3>离线数据</h3>
       <p class="hint" id="offlineStatus">首次使用需联网下载品种 K 线；下完后可断网练习。</p>
-      <button class="btn" id="prefetchBtn" type="button">下载全部品种</button>
+      <label>下载范围<select id="offlineMarket"><option value="">全部市场</option><option>加密</option><option>美股</option><option>A股</option><option>港股</option><option>贵金属</option></select></label>
+      <div class="row-btns offline-actions">
+        <button class="btn" id="prefetchBtn" type="button">下载未缓存品种</button>
+        <button class="btn" id="cancelDownload" type="button" hidden>取消下载</button>
+        <button class="btn" id="retryDownload" type="button" hidden>重试失败项</button>
+      </div>
+      <progress id="downloadProgress" value="0" max="1" hidden aria-label="下载进度"></progress>
+      <p class="hint" id="downloadStatus" role="status"></p>
+      <details><summary>查看各品种离线状态</summary><div id="offlineList"></div></details>
     </div>
 
     <div class="card">
       <h3>练习战绩 <span id="trStatMode"></span></h3>
       <div class="trade-stats" id="trStatsGrid"></div>
       <div id="trPerSym" class="per-sym"></div>
+      <div id="logicStats" class="per-sym"></div>
       <div class="row-btns">
         <button class="btn primary" id="trExport" type="button">导出全部练习明细 CSV</button>
         <button class="btn" id="trStatsClear" type="button">清零战绩</button>
       </div>
       <div class="subhead">历史练习（点开逐笔）</div>
       <div id="trHistory"></div>
+      <button class="btn" id="historyMore" type="button" hidden>加载更多历史</button>
     </div>
   </section>
 
@@ -83,6 +99,9 @@
         <span class="legend-chg" id="legendChg"></span>
         <span class="legend-dist" id="legendDist"></span>
       </div>
+      <button class="btn" id="chartSettingsBtn" type="button" aria-expanded="false" aria-controls="chartSettings">图表工具</button>
+    </div>
+    <div id="chartSettings" hidden>
       <div class="chart-tools-right">
         <label class="ma-lab">MA
           <input id="maPeriods" type="text" inputmode="text" enterkeyhint="done" autocapitalize="off" autocomplete="off" value="20,60,120">
@@ -94,7 +113,6 @@
           <button type="button" data-ov="vol" class="active">量</button>
         </div>
       </div>
-    </div>
     <div class="chart-toolbar draw-bar">
       <div class="seg" id="drawToggle">
         <button type="button" data-tool="none" class="active">画线关</button>
@@ -104,6 +122,7 @@
       <button class="btn" id="drawClear" type="button">清线</button>
       <span id="drawHint" class="draw-hint"></span>
     </div>
+    </div>
     <div class="chart-box">
       <div id="chart"></div>
       <div id="volume"></div>
@@ -111,15 +130,25 @@
       <div id="trainerBanner"></div>
     </div>
 
+    <button id="positionSummary" type="button" class="position-summary" aria-label="查看持仓与账户"></button>
+    <div id="reviewNav" hidden>
+      <button class="btn" id="reviewPrev" type="button">上一笔</button>
+      <span id="reviewLabel"></span>
+      <button class="btn" id="reviewNext" type="button">下一笔</button>
+    </div>
+
     <div id="tradeSheet" class="trade-sheet" hidden>
       <div class="sheet-backdrop" id="tradeSheetBackdrop"></div>
-      <div class="sheet-panel">
+      <div class="sheet-panel" role="region" aria-label="本局交易">
         <div class="sheet-grab">
           <span class="grab-bar"></span>
           <button class="btn" id="tradeSheetClose" type="button">收回</button>
         </div>
         <div class="trade-dock" id="tradeDock">
       <h3>本局交易 <span id="journalMode"></span></h3>
+      <div id="jPositions"></div>
+      <details id="newOrderDetails" open>
+      <summary>新开仓</summary>
       <div id="journalForm" class="journal-form">
         <div class="grid3">
           <label>保证金U<input id="jCapital" type="number" inputmode="decimal" value="100000" min="1"></label>
@@ -143,7 +172,7 @@
         </div>
         <button class="btn primary" id="jOpen" type="button">开单（当前K线）</button>
       </div>
-      <div id="jPositions"></div>
+      </details>
         </div>
       </div>
     </div>
@@ -160,6 +189,7 @@
 </div>
 
 <div id="loading" hidden><span>加载中…</span></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="vendor/lightweight-charts.standalone.production.js"></script>
 <script src="js/core.js"></script>
@@ -167,6 +197,8 @@
 <script src="js/charts.js"></script>
 <script src="js/journal.js"></script>
 <script src="js/trainer.js"></script>
+<script src="js/experience.js"></script>
+<script src="js/offline.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

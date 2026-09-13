@@ -107,6 +107,9 @@ function recordEquity(){
   const last = TR.curve[TR.curve.length - 1];
   if (last && last.step === TR.step) last.eq = eq;
   else TR.curve.push({ step: TR.step, eq });
+  const curve = document.querySelector('[data-curve]');
+  if (curve) curve.innerHTML = equitySparkSvg(TR.curve);
+  savePractice();
 }
 function equitySparkSvg(curve, w, h){
   w = w || 280; h = h || 56;
@@ -149,7 +152,7 @@ function renderJournal(){
     浮动 <span data-fsum style="font-weight:700;color:${floatSum >= 0 ? 'var(--up)' : 'var(--down)'}">${floatSum >= 0 ? '+' : ''}${floatSum.toFixed(2)}U</span>
     · 净值 <b data-aeq style="color:${eqCol}">${eq.toFixed(2)}U</b>
     ${positions.length ? '<button class="btn" data-act="close-all" type="button" style="margin-top:6px;width:100%;">一键全平</button>' : ''}
-    ${equitySparkSvg(TR.curve)}
+    <div data-curve>${equitySparkSvg(TR.curve)}</div>
   </div>`;
   for (const pos of positions){
     const ok = posLayoutOk(pos);
@@ -196,6 +199,7 @@ function renderJournal(){
 }
 
 function updateLivePnl(){
+  renderPositionSummary();
   const jm = document.getElementById('journalMode');
   if (jm) jm.textContent = inReplay() ? `· ${activeTF} @ ${fmtTime(replayT)}` : '';
   const bar = curBar();
@@ -265,7 +269,7 @@ function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false, 
   }
   const bar = curBar();
   if (!bar) return false;
-  const pnl = pnlOf(pos, bar.close) * r;
+  const pnl = Math.max(pnlOf(pos, bar.close), -posCashCapital(pos)) * r;
   const rec = makeRec(pos, r, bar.close, bar.time, pnl, exitLogic, reason);
   if (TR.active && !TR.revealed) TR.session.push(rec);
   acctAdj(posCashCapital(pos) * r + pnl);
@@ -277,6 +281,7 @@ function closePosObj(pos, r, exitLogic, reason = '手动平仓', force = false, 
     refreshAll({ light: true });
     recordEquity();
     updateTrainerUI();
+    toast(`${r < 1 ? '部分平仓' : '已平仓'} · ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}U`);
   }
   return true;
 }
@@ -303,6 +308,7 @@ function addMaxFloat(pos){
   refreshAll({ light: true });
   recordEquity();
   updateTrainerUI();
+  toast(`已用浮盈加仓 ${bd.avail.toFixed(2)}U`);
 }
 function closeAllPositions(){
   const mine = positions.filter(p => posLayoutOk(p));
@@ -314,6 +320,7 @@ function closeAllPositions(){
   refreshAll({ light: true });
   recordEquity();
   updateTrainerUI();
+  toast('持仓已全部平仓');
 }
 
 function checkStopAndLiquidate(){
@@ -322,19 +329,19 @@ function checkStopAndLiquidate(){
   if (!bar || !mine.length) return;
   let changed = false;
   for (const pos of mine){
-    const cap = posCapital(pos);
     const cash = posCashCapital(pos);
     const hitStop = pos.stop != null &&
       ((pos.side === '多' && bar.low <= pos.stop) ||
        (pos.side === '空' && bar.high >= pos.stop));
-    const liq = pnlOf(pos, bar.close) <= -cap;
+    const liq = pnlOf(pos, bar.close) <= -cash;
     if (!hitStop && !liq) continue;
     const px = hitStop ? pos.stop : bar.close;
-    const pnl = hitStop ? pnlOf(pos, pos.stop) : -cap;
+    const pnl = hitStop ? pnlOf(pos, pos.stop) : -cash;
     const rec = makeRec(pos, 1, px, bar.time, Math.max(pnl, -cash), '', hitStop ? '触发止损' : '单笔爆仓');
     if (TR.active && !TR.revealed) TR.session.push(rec);
     acctAdj(cash + Math.max(pnl, -cash));
     positions = positions.filter(p => p !== pos);
+    toast(`#${pos.id} ${hitStop ? '触发止损' : '单笔爆仓'} · ${Math.max(pnl, -cash).toFixed(2)}U`);
     changed = true;
   }
   if (changed){
@@ -416,6 +423,8 @@ function setupJournal(){
     syncMarginInput();
     refreshAll({ light: true });
     setTradeSheet(true);
+    document.getElementById('newOrderDetails').open = false;
+    toast('已开仓，可在持仓卡片查看或平仓');
     recordEquity();
     updateTrainerUI();
   });
@@ -475,6 +484,8 @@ function setupJournal(){
         renderJournal();
         refreshAll({ light: true });
         recordEquity();
+        updateTrainerUI();
+        toast(`已加仓 ${wantCap.toFixed(2)}U`);
         break;
       }
       case 'close-ok': {
