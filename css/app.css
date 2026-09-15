@@ -357,13 +357,14 @@ body.trainer-blind #trMktSel,
 body.trainer-blind #trTfSel { display: none !important; }
 
 #chartSettings {
-  position: absolute; left: 0; right: 0; top: 57px; z-index: 20;
+  position: absolute; left: 0; right: 0; top: auto; z-index: 20;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 0 0 12px 12px; box-shadow: 0 8px 20px #0004;
   max-height: calc(var(--app-height, 100dvh) - 160px); overflow: auto;
 }
-#practiceView > .chart-toolbar { height: 57px; }
-.legend { max-height: 48px; overflow-y: auto; line-height: 1.4; }
+#practiceView > .chart-toolbar { height: auto; min-height: 44px; align-items: flex-start; }
+.legend { max-height: none; overflow: visible; line-height: 1.35; }
+.legend-ohlc { flex: 1 1 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #chartSettingsBtn { flex-shrink: 0; }
 .ma-comma, .ma-lab input { min-height: 44px; }
 .draw-bar { flex-wrap: wrap; }

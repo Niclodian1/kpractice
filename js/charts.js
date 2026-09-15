@@ -79,39 +79,12 @@ function ensureCharts(){
 
   window.addEventListener('resize', () => requestAnimationFrame(alignPanes));
   chart.subscribeCrosshairMove(param => {
-    const oh = document.getElementById('legendOhlc');
-    const ch = document.getElementById('legendChg');
-    const dt = document.getElementById('legendDate');
-    const dist = document.getElementById('legendDist');
     const d = param.seriesData && param.seriesData.get(candleSeries);
     if (!param.time || !d){
-      oh.textContent = '—'; ch.textContent = ''; dt.textContent = '—';
-      if (dist) dist.textContent = '';
+      renderLegendBar(null);
       return;
     }
-    dt.textContent = fmtTime(d.time);
-    oh.textContent = `O ${fmt(d.open)}  H ${fmt(d.high)}  L ${fmt(d.low)}  C ${fmt(d.close)}`;
-    const cs = candlesFor(), i = idxMap[d.time];
-    const prev = i > 0 ? cs[i - 1].close : null;
-    if (prev){
-      const pct = (d.close - prev) / prev * 100;
-      ch.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-      ch.style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
-    } else ch.textContent = '';
-    const last = cs.length ? cs[cs.length - 1] : null;
-    if (dist && last){
-      let px = d.close;
-      if (param.point){
-        const p = candleSeries.coordinateToPrice(param.point.y);
-        if (p != null) px = p;
-      }
-      const dp = px - last.close;
-      const dd = Math.abs(dp) >= 1 ? 2 : Math.abs(dp) >= 0.01 ? 4 : 8;
-      const pp = last.close ? dp / last.close * 100 : 0;
-      const nb = cs.length - 1 - (i ?? cs.length - 1);
-      dist.textContent = `距最新 ${dp >= 0 ? '+' : ''}${dp.toFixed(dd)} (${pp >= 0 ? '+' : ''}${pp.toFixed(2)}%)${nb ? ` · ${nb}根` : ''}`;
-      dist.style.color = dp >= 0 ? 'var(--up)' : 'var(--down)';
-    } else if (dist) dist.textContent = '';
+    renderLegendBar(d, param);
   });
 }
 
@@ -135,9 +108,11 @@ function rebuildMA(){
   const periods = parseMaPeriods();
   const cs = candlesFor();
   const closes = cs.map(c => c.close);
+  const maFmt = priceFormatFor(rawRefPrice());
   while (maSeries.length < periods.length){
     const s = chart.addLineSeries({
       lineWidth: 1.4, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      priceFormat: maFmt,
     });
     maSeries.push({ period: 0, series: s });
   }
@@ -148,7 +123,11 @@ function rebuildMA(){
   periods.forEach((p, i) => {
     const item = maSeries[i];
     item.period = p;
-    item.series.applyOptions({ color: MA_COLORS[i % MA_COLORS.length], visible: document.querySelector('[data-ov="ma"]').classList.contains('active') });
+    item.series.applyOptions({
+      color: MA_COLORS[i % MA_COLORS.length],
+      visible: document.querySelector('[data-ov="ma"]').classList.contains('active'),
+      priceFormat: maFmt,
+    });
     const vals = sma(closes, p);
     item.series.setData(cs.map((c, j) => vals[j] != null ? { time: c.time, value: vals[j] } : null).filter(Boolean));
   });
@@ -188,8 +167,69 @@ function buildMaps(){
   cs.forEach((c, i) => { idxMap[c.time] = i; });
 }
 
+function renderLegendBar(d, param){
+  const oh = document.getElementById('legendOhlc');
+  const ch = document.getElementById('legendChg');
+  const dt = document.getElementById('legendDate');
+  const dist = document.getElementById('legendDist');
+  const cs = candlesFor();
+  const bar = d || cs[cs.length - 1];
+  if (!oh || !bar){
+    if (oh) oh.textContent = '—';
+    if (ch) ch.textContent = '';
+    if (dt) dt.textContent = '—';
+    if (dist) dist.textContent = '';
+    return;
+  }
+  dt.textContent = fmtTime(bar.time);
+  oh.textContent = `O ${fmt(bar.open)}  H ${fmt(bar.high)}  L ${fmt(bar.low)}  C ${fmt(bar.close)}`;
+  oh.title = `O ${bar.open}  H ${bar.high}  L ${bar.low}  C ${bar.close}`;
+  const i = idxMap[bar.time];
+  const prev = i > 0 ? cs[i - 1].close : null;
+  if (prev){
+    const pct = (bar.close - prev) / prev * 100;
+    ch.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+    ch.style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
+  } else ch.textContent = '';
+  const last = cs.length ? cs[cs.length - 1] : null;
+  if (dist && last){
+    let px = bar.close;
+    if (param && param.point){
+      const p = candleSeries.coordinateToPrice(param.point.y);
+      if (p != null) px = p;
+    }
+    const dp = px - last.close;
+    const pp = last.close ? dp / last.close * 100 : 0;
+    const nb = cs.length - 1 - (i ?? cs.length - 1);
+    dist.textContent = param
+      ? `距最新 ${dp >= 0 ? '+' : ''}${fmt(dp)} (${pp >= 0 ? '+' : ''}${pp.toFixed(2)}%)${nb ? ` · ${nb}根` : ''}`
+      : '';
+    dist.style.color = dp >= 0 ? 'var(--up)' : 'var(--down)';
+  } else if (dist) dist.textContent = '';
+}
+function rawRefPrice(){
+  const lv = L();
+  if (!lv || !lv.candles.length) return 1;
+  const { lo, hi } = displayRange();
+  const row = lv.candles[Math.max(lo, hi - 1)] || lv.candles[lv.candles.length - 1];
+  return Math.abs(row[4]) || 1;
+}
+function applyPriceFormats(){
+  const px = priceFormatFor(rawRefPrice());
+  candleSeries.applyOptions({ priceFormat: px });
+  for (const m of maSeries) m.series.applyOptions({ priceFormat: px });
+  const md = buildMacdData();
+  let macdRef = 0;
+  for (const row of md.hist) macdRef = Math.max(macdRef, Math.abs(row.value) || 0);
+  for (const row of md.diff) macdRef = Math.max(macdRef, Math.abs(row.value) || 0);
+  const mf = priceFormatFor(macdRef || rawRefPrice() * 1e-3);
+  macdHistSeries.applyOptions({ priceFormat: mf });
+  macdLineSeries.applyOptions({ priceFormat: mf });
+  macdSignalSeries.applyOptions({ priceFormat: mf });
+}
 function applySeries(){
   if (!chart) return;
+  applyPriceFormats();
   candleSeries.setData(candlesFor());
   candleSeries.setMarkers(buildMarkers());
   volumeSeries.setData(buildVolData());
@@ -199,6 +239,8 @@ function applySeries(){
   macdSignalSeries.setData(md.dea);
   buildMaps();
   rebuildMA();
+  applyPriceFormats();
+  renderLegendBar(null);
   refreshDrawOverlay();
 }
 

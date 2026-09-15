@@ -65,11 +65,44 @@ function fmtTime(ts){
   if (trLocked()) return trLabel(ts);
   return fmtTimeReal(ts);
 }
-const fmt = n => {
+const SUB_DIGITS = '₀₁₂₃₄₅₆₇₈₉';
+function subDigits(n){
+  return String(n).replace(/\d/g, d => SUB_DIGITS[d]);
+}
+function priceDecimals(n){
+  const a = Math.abs(Number(n)) || 0;
+  if (!a) return 2;
+  if (a >= 1) return 2;
+  return Math.min(12, Math.max(4, -Math.floor(Math.log10(a)) + 3));
+}
+function roundPrice(n){
   n = Number(n);
-  const d = Math.abs(n) >= 1 ? 1 : Math.abs(n) >= 0.01 ? 4 : 8;
-  return n.toLocaleString('en-US', { maximumFractionDigits: d });
-};
+  if (!Number.isFinite(n)) return n;
+  return +n.toFixed(priceDecimals(n));
+}
+function priceFormatFor(ref){
+  const a = Math.abs(Number(ref)) || 1;
+  const decimals = a >= 1 ? 2 : priceDecimals(a);
+  const minMove = Math.pow(10, -decimals);
+  return { type: 'custom', minMove, formatter: fmt };
+}
+function fmt(n){
+  n = Number(n);
+  if (!Number.isFinite(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  if (a === 0) return '0';
+  if (a >= 1000) return sign + a.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  if (a >= 1) return sign + a.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  if (a >= 0.01) return sign + a.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  if (a < 1e-12) return sign + a.toExponential(2);
+  const exp = Math.floor(Math.log10(a));
+  const lead = -exp - 1;
+  const mantissa = a / Math.pow(10, exp);
+  const sig = mantissa.toFixed(3).replace('.', '').replace(/0+$/, '') || '0';
+  if (lead >= 3) return `${sign}0.0${subDigits(lead)}${sig}`;
+  return sign + a.toFixed(lead + 4).replace(/0+$/, '').replace(/\.$/, '');
+}
 
 function displayRange(){
   const lv = L();

@@ -164,11 +164,11 @@ function renderJournal(){
     const lastLev = pos.entries[pos.entries.length - 1].leverage;
     const addN = pos.entries.length - 1;
     html += `<div class="pos-card" data-pid="${pos.id}">
-      <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))} · 止损 ${pos.stop ?? '—'}<br>
+      <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))} · 止损 ${pos.stop == null ? '—' : fmt(pos.stop)}<br>
       <span style="opacity:.85">持仓金额 ${pv.toFixed(1)} U</span><br>
       <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
       ${pos.entries.map((e, i) =>
-        `<span style="opacity:.72">${i + 1}) ${e.price} · ${e.leverage}x · ${e.capital}U · ${fmtLogic(e.logic)}</span>`
+        `<span style="opacity:.72">${i + 1}) ${fmt(e.price)} · ${e.leverage}x · ${e.capital}U · ${fmtLogic(e.logic)}</span>`
       ).join('<br>')}
       <div class="row-btns" style="margin-top:8px;">
         <button class="btn primary" data-act="add-one" data-pid="${pos.id}" type="button">一键加仓</button>
@@ -250,7 +250,7 @@ function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
     side: pos.side, leverage: pos.entries[0].leverage, capital: +capClosed.toFixed(2),
     entry_ts: pos.entries[0].t, exit_ts: exitTs,
     entry_ts_list: pos.entries.map(e => e.t), entry_prices: pos.entries.map(e => e.price),
-    entry_time: fmtTimeReal(pos.entries[0].t), entry: +posAvgEntry(pos).toFixed(2),
+    entry_time: fmtTimeReal(pos.entries[0].t), entry: roundPrice(posAvgEntry(pos)),
     exit_time: fmtTimeReal(exitTs), exit_price: exitPrice,
     stop: pos.stop ?? '', logic: pos.entries[0].logic,
     adds: pos.entries.length - 1, ratio: +r.toFixed(2), partial: r < 1,
