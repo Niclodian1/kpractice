@@ -5,7 +5,7 @@ let offlineReady = false;
 let downloadController = null;
 let failedDownloads = [];
 let offlineItems = new Map();
-const symbolUrl = s => new URL(`data/${s.id.toLowerCase()}.json`, location.href).href;
+const symbolUrl = s => new URL(symbolDataUrl(s.id), location.href).href;
 
 async function refreshOfflineStatus(){
   const status = document.getElementById('offlineStatus');

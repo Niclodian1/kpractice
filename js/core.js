@@ -185,9 +185,14 @@ async function loadCatalog(){
   if (!r.ok) throw new Error('缺少 data/catalog.json，请先运行 python3 tools/build_mobile_data.py');
   CATALOG = await r.json();
 }
+function symbolDataUrl(sym){
+  const id = String(sym).toLowerCase();
+  const v = CATALOG.updatedAt ? `?v=${CATALOG.updatedAt}` : '';
+  return `data/${id}.json${v}`;
+}
 async function loadSymbol(sym){
   if (DATA && currentSym === sym) return DATA;
-  const r = await fetch('data/' + String(sym).toLowerCase() + '.json');
+  const r = await fetch(symbolDataUrl(sym));
   if (!r.ok) throw new Error('K线加载失败');
   DATA = await r.json();
   currentSym = sym;
