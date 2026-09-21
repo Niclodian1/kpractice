@@ -1,4 +1,4 @@
-const CACHE = 'kpractice-v15';
+const CACHE = 'kpractice-v16';
 const DATA_CACHE = 'kpractice-data-v1';
 const SHELL = [
   './',

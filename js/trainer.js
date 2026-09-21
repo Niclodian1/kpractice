@@ -75,7 +75,9 @@ async function enterTrainer(){
   btn.disabled = true; btn.textContent = '随机定位中…';
   setLoading(true, '随机定位中…');
   try {
+    TR.LOOKBACK = 200;
     const need = TR.LOOKBACK + TR.maxStep + 5;
+    const minBars = Math.min(need, 280);
     const symSel = document.getElementById('trSymSel').value || '';
     const mktSel = document.getElementById('trMktSel').value || '';
     const tfSel = document.getElementById('trTfSel').value || '';
@@ -87,8 +89,8 @@ async function enterTrainer(){
       pool = pool.filter(s => offlineItems.get(s.id));
       if (!pool.length){ toast('所选范围没有离线数据，请选择已缓存品种'); return; }
     }
-    if (tfSel) pool = pool.filter(s => (s.timeframes || []).includes(tfSel) && (s.bars[tfSel] || 0) >= need);
-    else pool = pool.filter(s => (s.timeframes || []).some(tf => (s.bars[tf] || 0) >= need));
+    if (tfSel) pool = pool.filter(s => (s.timeframes || []).includes(tfSel) && (s.bars[tfSel] || 0) >= minBars);
+    else pool = pool.filter(s => (s.timeframes || []).some(tf => (s.bars[tf] || 0) >= minBars));
     if (!pool.length){
       alert(tfSel && tfSel !== '1D'
         ? `${tfSel} 目前仅加密品种有小时线。请改选加密，或用日线练习。`
@@ -101,12 +103,19 @@ async function enterTrainer(){
       const meta = pool[randInt(pool.length)];
       setLoading(true, '加载K线…');
       await loadSymbol(meta.id);
-      let tfs = (DATA.meta.timeframes || []).filter(tf => (DATA.levels[tf] && DATA.levels[tf].candles.length >= need));
+      let tfs = (DATA.meta.timeframes || []).filter(tf => (DATA.levels[tf] && DATA.levels[tf].candles.length >= minBars));
       if (tfSel && !tfs.includes(tfSel)) continue;
       if (!tfs.length) continue;
       const tf = tfSel || tfs[randInt(tfs.length)];
       const candles = DATA.levels[tf].candles;
       const len = candles.length;
+      let lookback = 200;
+      let maxStep = TR.maxStep;
+      if (len < lookback + maxStep + 5){
+        lookback = Math.min(lookback, Math.max(40, len - maxStep - 5));
+        maxStep = Math.min(maxStep, Math.max(20, len - lookback - 5));
+      }
+      if (len < lookback + maxStep + 5) continue;
       TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: INIT_CAPITAL }]; TR.revealed = false; TR.active = true;
       if (typeof clearDrawings === 'function') clearDrawings();
       TR.startWallTs = Date.now();
@@ -115,7 +124,9 @@ async function enterTrainer(){
       acctReset();
       activeTF = tf;
       TR.sym = meta.id; TR.tf = tf;
-      const lo = TR.LOOKBACK, hi = len - TR.maxStep - 2;
+      TR.LOOKBACK = lookback;
+      TR.maxStep = maxStep;
+      const lo = lookback, hi = len - maxStep - 2;
       let startIdx = null;
       for (let k = 0; k < 24; k++){
         const idx = lo + randInt(Math.max(1, hi - lo));

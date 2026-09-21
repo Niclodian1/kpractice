@@ -4,7 +4,7 @@
     "4H",
     "1H"
   ],
-  "updatedAt": 1789960085,
+  "updatedAt": 1789991728,
   "symbols": [
     {
       "id": "BTC",
@@ -389,6 +389,32 @@
         "1D": 6117
       },
       "bytes": 602226
+    },
+    {
+      "id": "INTC",
+      "name": "INTC · 英特尔",
+      "market": "美股",
+      "symbol": "INTC 英特尔",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 11722
+      },
+      "bytes": 1152793
+    },
+    {
+      "id": "SNDK",
+      "name": "SNDK · 闪迪",
+      "market": "美股",
+      "symbol": "SNDK 闪迪",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 401
+      },
+      "bytes": 35640
     },
     {
       "id": "0700_HK",
