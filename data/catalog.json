@@ -4,7 +4,7 @@
     "4H",
     "1H"
   ],
-  "updatedAt": 1789785451,
+  "updatedAt": 1789956109,
   "symbols": [
     {
       "id": "BTC",
@@ -129,6 +129,58 @@
         "1D": 15171
       },
       "bytes": 1234287
+    },
+    {
+      "id": "SPX",
+      "name": "SPX · 标普500",
+      "market": "指数",
+      "symbol": "SPX 标普500",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 24796
+      },
+      "bytes": 2312341
+    },
+    {
+      "id": "NDX",
+      "name": "NDX · 纳斯达克100",
+      "market": "指数",
+      "symbol": "NDX 纳斯达克100",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 10321
+      },
+      "bytes": 962374
+    },
+    {
+      "id": "399006_SZ",
+      "name": "399006.SZ · 创业板指数",
+      "market": "指数",
+      "symbol": "399006.SZ 创业板指数",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 3961
+      },
+      "bytes": 218701
+    },
+    {
+      "id": "000688_SS",
+      "name": "000688.SS · 科创50",
+      "market": "指数",
+      "symbol": "000688.SS 科创50",
+      "timeframes": [
+        "1D"
+      ],
+      "bars": {
+        "1D": 1630
+      },
+      "bytes": 87270
     },
     {
       "id": "AAPL",
