@@ -115,7 +115,14 @@ async function enterTrainer(){
       acctReset();
       activeTF = tf;
       TR.sym = meta.id; TR.tf = tf;
-      TR.startIdx = TR.LOOKBACK + randInt(len - TR.LOOKBACK - TR.maxStep - 2);
+      const lo = TR.LOOKBACK, hi = len - TR.maxStep - 2;
+      let startIdx = null;
+      for (let k = 0; k < 24; k++){
+        const idx = lo + randInt(Math.max(1, hi - lo));
+        if (candles[idx][2] > candles[idx][3]){ startIdx = idx; break; }
+      }
+      if (startIdx == null) continue;
+      TR.startIdx = startIdx;
       TR.startTs = candles[TR.startIdx][0];
       applyBlind(true);
       showPractice();
