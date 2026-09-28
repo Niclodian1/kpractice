@@ -378,7 +378,7 @@ input, select, textarea {
   font-size: 12px;
 }
 .pos-card .row-btns { flex-direction: row; flex-wrap: wrap; }
-.pos-card .btn { flex: 1; min-height: 40px; width: auto; }
+.pos-card .btn { flex: 1 1 calc(50% - 8px); min-height: 40px; width: auto; }
 .pos-card .btn.primary { width: auto; }
 .eq-spark { display: block; margin-top: 8px; }
 

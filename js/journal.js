@@ -164,7 +164,8 @@ function renderJournal(){
     const lastLev = pos.entries[pos.entries.length - 1].leverage;
     const addN = pos.entries.length - 1;
     html += `<div class="pos-card" data-pid="${pos.id}">
-      <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))} · 止损 ${pos.stop == null ? '—' : fmt(pos.stop)}<br>
+      <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))}<br>
+      <span style="opacity:.85">止损 ${pos.stop == null ? '—' : fmt(pos.stop)} · 止盈 ${pos.tp == null ? '—' : fmt(pos.tp)}</span><br>
       <span style="opacity:.85">持仓金额 ${pv.toFixed(1)} U</span><br>
       <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
       ${pos.entries.map((e, i) =>
@@ -173,7 +174,13 @@ function renderJournal(){
       <div class="row-btns" style="margin-top:8px;">
         <button class="btn primary" data-act="add-one" data-pid="${pos.id}" type="button">一键加仓</button>
         <button class="btn" data-act="add-toggle" data-pid="${pos.id}" type="button">加仓</button>
+        <button class="btn" data-act="levels-toggle" data-pid="${pos.id}" type="button">改止盈止损</button>
         <button class="btn" data-act="close-toggle" data-pid="${pos.id}" type="button">平仓</button>
+      </div>
+      <div class="sec-levels" style="display:none;flex-direction:column;gap:6px;margin-top:6px;">
+        <label>止损（空=取消）<input type="number" class="inp-sl" inputmode="decimal" value="${pos.stop == null ? '' : pos.stop}"></label>
+        <label>止盈（空=取消）<input type="number" class="inp-tp" inputmode="decimal" value="${pos.tp == null ? '' : pos.tp}"></label>
+        <button class="btn primary" data-act="levels-ok" data-pid="${pos.id}" type="button">确认修改</button>
       </div>
       <div class="sec-add" style="display:none;flex-direction:column;gap:6px;margin-top:6px;">
         <div data-budget="${pos.id}" style="font-size:11px;opacity:.8;"></div>
@@ -181,6 +188,7 @@ function renderJournal(){
         <label>杠杆<input type="number" class="inp-add-lev" inputmode="numeric" value="${lastLev}" min="1" max="125"></label>
         <label>加仓价<input type="number" class="inp-add-price" inputmode="decimal" placeholder="当前收盘"></label>
         <label>止损（空=不变）<input type="number" class="inp-add-stop" inputmode="decimal"></label>
+        <label>止盈（空=不变）<input type="number" class="inp-add-tp" inputmode="decimal"></label>
         <label>加仓逻辑（空=浮盈加仓）<textarea class="inp-add-logic" rows="2" placeholder="浮盈加仓"></textarea></label>
         <button class="btn primary" data-act="add-ok" data-pid="${pos.id}" type="button">确认加仓</button>
       </div>
@@ -252,7 +260,7 @@ function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
     entry_ts_list: pos.entries.map(e => e.t), entry_prices: pos.entries.map(e => e.price),
     entry_time: fmtTimeReal(pos.entries[0].t), entry: roundPrice(posAvgEntry(pos)),
     exit_time: fmtTimeReal(exitTs), exit_price: exitPrice,
-    stop: pos.stop ?? '', logic: pos.entries[0].logic,
+    stop: pos.stop ?? '', tp: pos.tp ?? '', logic: pos.entries[0].logic,
     adds: pos.entries.length - 1, ratio: +r.toFixed(2), partial: r < 1,
     entries: pos.entries.map(e => ({ t: fmtTimeReal(e.t), price: e.price, capital: e.capital, leverage: e.leverage, logic: e.logic })),
     exit_logic: exitLogic,
@@ -323,6 +331,35 @@ function closeAllPositions(){
   toast('持仓已全部平仓');
 }
 
+function parseOptionalPrice(raw){
+  const v = String(raw ?? '').trim();
+  if (!v) return null;
+  const n = +v;
+  return Number.isFinite(n) ? n : null;
+}
+function levelsError(side, entry, stop, tp){
+  if (stop != null){
+    if (side === '多' && !(stop < entry)) return '多单止损须低于均价';
+    if (side === '空' && !(stop > entry)) return '空单止损须高于均价';
+  }
+  if (tp != null){
+    if (side === '多' && !(tp > entry)) return '多单止盈须高于均价';
+    if (side === '空' && !(tp < entry)) return '空单止盈须低于均价';
+  }
+  if (stop != null && tp != null){
+    if (side === '多' && !(stop < tp)) return '多单止损须低于止盈';
+    if (side === '空' && !(stop > tp)) return '空单止损须高于止盈';
+  }
+  return '';
+}
+function applyPosLevels(pos, stop, tp){
+  const err = levelsError(pos.side, posAvgEntry(pos), stop, tp);
+  if (err) return err;
+  pos.stop = stop;
+  pos.tp = tp;
+  return '';
+}
+
 function checkStopAndLiquidate(){
   const bar = curBar();
   const mine = positions.filter(p => posLayoutOk(p));
@@ -333,15 +370,19 @@ function checkStopAndLiquidate(){
     const hitStop = pos.stop != null &&
       ((pos.side === '多' && bar.low <= pos.stop) ||
        (pos.side === '空' && bar.high >= pos.stop));
+    const hitTp = pos.tp != null &&
+      ((pos.side === '多' && bar.high >= pos.tp) ||
+       (pos.side === '空' && bar.low <= pos.tp));
     const liq = pnlOf(pos, bar.close) <= -cash;
-    if (!hitStop && !liq) continue;
-    const px = hitStop ? pos.stop : bar.close;
-    const pnl = hitStop ? pnlOf(pos, pos.stop) : -cash;
-    const rec = makeRec(pos, 1, px, bar.time, Math.max(pnl, -cash), '', hitStop ? '触发止损' : '单笔爆仓');
+    if (!hitStop && !hitTp && !liq) continue;
+    const reason = hitStop ? '触发止损' : (liq ? '单笔爆仓' : '触发止盈');
+    const px = hitStop ? pos.stop : (liq ? bar.close : pos.tp);
+    const pnl = hitStop ? pnlOf(pos, pos.stop) : (liq ? -cash : pnlOf(pos, pos.tp));
+    const rec = makeRec(pos, 1, px, bar.time, Math.max(pnl, -cash), '', reason);
     if (TR.active && !TR.revealed) TR.session.push(rec);
     acctAdj(cash + Math.max(pnl, -cash));
     positions = positions.filter(p => p !== pos);
-    toast(`#${pos.id} ${hitStop ? '触发止损' : '单笔爆仓'} · ${Math.max(pnl, -cash).toFixed(2)}U`);
+    toast(`#${pos.id} ${reason} · ${Math.max(pnl, -cash).toFixed(2)}U`);
     changed = true;
   }
   if (changed){
@@ -383,6 +424,12 @@ function refreshPositionLines(){
         axisLabelVisible: true, title: `${pos.id}损`,
       })});
     }
+    if (pos.tp != null){
+      posPriceLines.push({ pid: pos.id, kind: 'tp', line: candleSeries.createPriceLine({
+        price: pos.tp, color: t().up, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true, title: `${pos.id}盈`,
+      })});
+    }
   }
 }
 
@@ -404,15 +451,22 @@ function setupJournal(){
       return;
     }
     if (margin <= 0){ alert('保证金须大于 0'); return; }
+    const entry = +document.getElementById('jEntry').value || bar.close;
+    const side = document.getElementById('jSide').value;
+    const stop = parseOptionalPrice(document.getElementById('jStop').value);
+    const tp = parseOptionalPrice(document.getElementById('jTake').value);
+    const lvlErr = levelsError(side, entry, stop, tp);
+    if (lvlErr){ alert(lvlErr); return; }
     acctAdj(-margin);
     positions.push({
       id: posSeq++,
       sym: currentSym, tf: activeTF,
-      side: document.getElementById('jSide').value,
-      stop: document.getElementById('jStop').value ? +document.getElementById('jStop').value : null,
+      side,
+      stop,
+      tp,
       entries: [{
         t: bar.time,
-        price: +document.getElementById('jEntry').value || bar.close,
+        price: entry,
         capital: margin,
         leverage: Math.min(125, +document.getElementById('jLeverage').value || 10),
         logic,
@@ -441,7 +495,7 @@ function setupJournal(){
     if (!pos) return;
     const q = sel => card.querySelector(sel);
     const showOnly = secName => {
-      for (const s of card.querySelectorAll('.sec-add,.sec-exit')) s.style.display = 'none';
+      for (const s of card.querySelectorAll('.sec-add,.sec-exit,.sec-levels')) s.style.display = 'none';
       if (secName) q(secName).style.display = 'flex';
     };
     switch (b.dataset.act){
@@ -462,6 +516,22 @@ function setupJournal(){
       case 'close-toggle':
         showOnly(q('.sec-exit').style.display === 'none' ? '.sec-exit' : null);
         break;
+      case 'levels-toggle':
+        showOnly(q('.sec-levels').style.display === 'none' ? '.sec-levels' : null);
+        break;
+      case 'levels-ok': {
+        const stop = parseOptionalPrice(q('.inp-sl').value);
+        const tp = parseOptionalPrice(q('.inp-tp').value);
+        const err = applyPosLevels(pos, stop, tp);
+        if (err){ alert(err); return; }
+        renderJournal();
+        refreshAll({ light: true });
+        checkStopAndLiquidate();
+        recordEquity();
+        updateTrainerUI();
+        toast(`#${pos.id} 已改止盈止损`);
+        break;
+      }
       case 'add-ok': {
         const logic = q('.inp-add-logic').value.trim() || '浮盈加仓';
         const bar = curBar(); if (!bar) return;
@@ -479,8 +549,16 @@ function setupJournal(){
           leverage: Math.min(125, +q('.inp-add-lev').value || pos.entries[pos.entries.length - 1].leverage),
           logic,
         });
-        const ns = q('.inp-add-stop').value;
-        if (ns) pos.stop = +ns;
+        const ns = parseOptionalPrice(q('.inp-add-stop').value);
+        const nt = parseOptionalPrice(q('.inp-add-tp').value);
+        if (ns != null || nt != null){
+          const err = applyPosLevels(pos, ns != null ? ns : pos.stop, nt != null ? nt : pos.tp);
+          if (err){
+            pos.entries.pop();
+            alert(err);
+            return;
+          }
+        }
         renderJournal();
         refreshAll({ light: true });
         recordEquity();
