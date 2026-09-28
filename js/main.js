@@ -30,7 +30,14 @@ function setupChrome(){
 async function registerSW(){
   if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
   try {
-    await navigator.serviceWorker.register('sw.js');
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    });
+    const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+    try { await reg.update(); } catch {}
     let timeout;
     try {
       await Promise.race([navigator.serviceWorker.ready,

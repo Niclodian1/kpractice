@@ -1,4 +1,4 @@
-const CACHE = 'kpractice-v17';
+const CACHE = 'kpractice-v18';
 const DATA_CACHE = 'kpractice-data-v1';
 const SHELL = [
   './',
@@ -21,9 +21,16 @@ const SHELL = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.all(SHELL.map(async path => {
+      const url = new URL(path, self.registration.scope).href;
+      const res = await fetch(url, { cache: 'reload' });
+      if (!res.ok) throw new Error('shell ' + path);
+      await cache.put(path, res);
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', event => {
@@ -68,15 +75,17 @@ self.addEventListener('fetch', event => {
       }
       return net;
     }
-    // Versioned shell stays consistent, including on slow/offline connections.
-    const hit = await cache.match(req);
-    if (hit) return hit;
     try {
-      const net = await fetch(req);
+      const net = await fetch(req, { cache: 'no-store' });
+      if (net.ok){
+        try { await cache.put(req, net.clone()); } catch {}
+      }
       return net;
     } catch {
+      const hit = await cache.match(req);
+      if (hit) return hit;
       if (req.mode === 'navigate'){
-        const page = await cache.match('./index.html');
+        const page = await cache.match('./index.html') || await cache.match('./');
         if (page) return page;
       }
       throw new Error('offline miss');
