@@ -7,6 +7,7 @@ function showHome(){
   document.getElementById('homeView').hidden = false;
   document.getElementById('practiceView').hidden = true;
   refreshOfflineStatus();
+  renderWeeklyCheckin();
 }
 function showPractice(){
   setTradeSheet(false);
@@ -318,6 +319,7 @@ function archiveSession(cond){
   persistFlush();
   renderTrainerSessions();
   renderLogicStats();
+  renderWeeklyCheckin();
 }
 
 let historyLimit = 20;
@@ -341,6 +343,25 @@ function renderTrainerSessions(){
       <span>入场：${escapeHtml(trade.logic || '未记录')} · 出场：${escapeHtml(trade.exit_logic || trade.exit_reason || '未记录')}</span></button>`).join('')}
       </div></details>`;
   }).join('');
+}
+
+function renderWeeklyCheckin(){
+  const countEl = document.getElementById('weekCheckinCount');
+  if (!countEl) return;
+  const w = weeklyCheckin();
+  const left = Math.max(0, w.goal - w.count);
+  const fmt = ts => new Date(ts).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  document.getElementById('weekCheckinRange').textContent = `${fmt(w.start)} – ${fmt(w.end - 1)}`;
+  countEl.innerHTML = `${w.count} <small>/ ${w.goal}</small>`;
+  document.getElementById('weekCheckinBar').style.width = `${Math.min(100, w.count / w.goal * 100)}%`;
+  document.getElementById('weekCheckinDots').innerHTML = Array.from({ length: w.goal }, (_, i) =>
+    `<span class="${i < w.count ? 'on' : ''}"></span>`).join('');
+  document.getElementById('weekCheckinDays').innerHTML = [...'一二三四五六日'].map((n, i) =>
+    `<div>${n}<b>${w.days[i] || 0}</b></div>`).join('');
+  const streak = w.streak ? ` · 连续 ${w.streak} 周达标` : '';
+  document.getElementById('weekCheckinHint').textContent = w.done
+    ? `本周已打卡 ${w.count} 局${streak}`
+    : `还差 ${left} 局 · 走完或爆仓计入，放弃不计${streak}`;
 }
 
 function renderTrainerStats(){
@@ -413,6 +434,7 @@ function setupTrainer(){
       persistFlush();
       renderTrainerStats();
       renderTrainerSessions();
+      renderWeeklyCheckin();
     }
   });
   document.getElementById('trExport').addEventListener('click', () => exportTrainerCsv());
@@ -426,5 +448,6 @@ function setupTrainer(){
   document.addEventListener('visibilitychange', () => { if (document.hidden) savePractice(); });
   renderTrainerStats();
   renderTrainerSessions();
+  renderWeeklyCheckin();
   updateTrainerUI();
 }

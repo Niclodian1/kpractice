@@ -136,6 +136,68 @@ input, select, textarea {
 .subhead { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 8px 0 6px; }
 .per-sym { font-size: 11px; color: var(--muted); line-height: 1.8; }
 
+.checkin-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.checkin-head h3 { margin: 0; }
+.checkin-head .hint { margin: 0; }
+.checkin-count {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.checkin-count small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.checkin-bar {
+  height: 8px;
+  background: var(--plane);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 10px 0 12px;
+}
+.checkin-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--up);
+}
+.checkin-dots {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.checkin-dots span {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--plane);
+}
+.checkin-dots span.on {
+  background: var(--up);
+  border-color: var(--up);
+}
+.checkin-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.checkin-days b {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .trade-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;

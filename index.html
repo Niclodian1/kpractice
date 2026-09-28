@@ -31,6 +31,17 @@
       <button class="btn primary" id="resumeBtn" type="button">继续上次练习</button>
       <button class="btn" id="discardResumeBtn" type="button">删除这局进度</button>
     </div>
+    <div class="card" id="weekCard">
+      <div class="checkin-head">
+        <h3>本周打卡</h3>
+        <span class="hint" id="weekCheckinRange"></span>
+      </div>
+      <div class="checkin-count" id="weekCheckinCount">0 <small>/ 20</small></div>
+      <div class="checkin-bar" aria-hidden="true"><i id="weekCheckinBar"></i></div>
+      <div class="checkin-dots" id="weekCheckinDots" aria-hidden="true"></div>
+      <div class="checkin-days" id="weekCheckinDays"></div>
+      <p class="hint" id="weekCheckinHint">每周至少完成 20 局。走完或爆仓计入，放弃不计。</p>
+    </div>
     <div class="card">
       <h3>开始一局</h3>
       <label>品种

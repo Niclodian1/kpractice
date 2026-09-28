@@ -29,6 +29,49 @@ let accountState = lsGet(ACCT_KEY, {}) || {};
 const trStatsLoad = () => JSON.parse(JSON.stringify(statsState));
 const trStatsSave = s => { statsState = s; return lsSet(TRKEY, s); };
 const tsLoad = () => savedHistory.sessions;
+const WEEK_GOAL = 20;
+function weekStartMs(ts = Date.now()){
+  const d = new Date(ts);
+  const offset = (d.getDay() + 6) % 7;
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - offset);
+  return d.getTime();
+}
+function nextWeekStartMs(start){
+  const d = new Date(start);
+  d.setDate(d.getDate() + 7);
+  return d.getTime();
+}
+function weeklyCheckin(now = Date.now(), sessions){
+  const all = (sessions || tsLoad() || []).filter(s => s && s.cond !== '放弃' && Number.isFinite(+s.ts));
+  const start = weekStartMs(now);
+  const end = nextWeekStartMs(start);
+  const inRange = (lo, hi) => all.filter(s => s.ts >= lo && s.ts < hi);
+  const thisWeek = inRange(start, end);
+  const days = [];
+  for (let i = 0; i < 7; i++){
+    const d0 = new Date(start);
+    d0.setDate(d0.getDate() + i);
+    const d1 = new Date(start);
+    d1.setDate(d1.getDate() + i + 1);
+    days.push(inRange(d0.getTime(), d1.getTime()).length);
+  }
+  let streak = 0;
+  let cursor = start;
+  if (thisWeek.length < WEEK_GOAL){
+    const prev = new Date(start);
+    prev.setDate(prev.getDate() - 7);
+    cursor = prev.getTime();
+  }
+  while (streak < 520){
+    if (inRange(cursor, nextWeekStartMs(cursor)).length < WEEK_GOAL) break;
+    streak++;
+    const prev = new Date(cursor);
+    prev.setDate(prev.getDate() - 7);
+    cursor = prev.getTime();
+  }
+  return { start, end, count: thisWeek.length, goal: WEEK_GOAL, done: thisWeek.length >= WEEK_GOAL, streak, days };
+}
 const tsSave = arr => {
   savedHistory = { updatedAt: Math.max(Date.now(), savedHistory.updatedAt + 1), sessions: arr, stats: trStatsLoad() };
   const backup = lsSet(HISTORY_KEY, savedHistory);
