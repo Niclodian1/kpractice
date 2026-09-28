@@ -1,4 +1,4 @@
-const CACHE = 'kpractice-v19';
+const CACHE = 'kpractice-v20';
 const DATA_CACHE = 'kpractice-data-v1';
 const SHELL = [
   './',
@@ -64,27 +64,30 @@ self.addEventListener('fetch', event => {
 
   event.respondWith((async () => {
     const cache = await caches.open(isKline ? DATA_CACHE : CACHE);
+    const save = res => {
+      if (!res || !res.ok) return res;
+      const task = cache.put(req, res.clone()).catch(() => {});
+      try { event.waitUntil(task); } catch {}
+      return res;
+    };
     if (isKline){
-      // The download manager validates and stores explicit refreshes itself.
-      if (req.headers.get('X-Kpractice-Refresh') === '1') return fetch(req);
+      if (req.headers.get('X-Kpractice-Refresh') === '1') return save(await fetch(req));
       const hit = await cache.match(req);
       if (hit) return hit;
-      const net = await fetch(req);
-      if (net.ok){
-        try { await cache.put(req, net.clone()); } catch {}
-      }
-      return net;
+      return save(await fetch(req));
+    }
+    const isNav = req.mode === 'navigate' || url.pathname.endsWith('.html') || /\/$/.test(url.pathname);
+    const hit = await cache.match(req);
+    if (hit && !isNav){
+      event.waitUntil(fetch(req).then(save).catch(() => {}));
+      return hit;
     }
     try {
-      const net = await fetch(req, { cache: 'no-store' });
-      if (net.ok){
-        try { await cache.put(req, net.clone()); } catch {}
-      }
-      return net;
+      const net = await fetch(req);
+      return save(net);
     } catch {
-      const hit = await cache.match(req);
       if (hit) return hit;
-      if (req.mode === 'navigate'){
+      if (isNav){
         const page = await cache.match('./index.html') || await cache.match('./');
         if (page) return page;
       }

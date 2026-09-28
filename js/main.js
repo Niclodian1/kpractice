@@ -33,11 +33,14 @@ async function registerSW(){
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (reloading) return;
+      if (typeof TR !== 'undefined' && TR.active) return;
+      const loading = document.getElementById('loading');
+      if (loading && !loading.hidden) return;
       reloading = true;
       location.reload();
     });
     const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
-    try { await reg.update(); } catch {}
+    try { reg.update(); } catch {}
     let timeout;
     try {
       await Promise.race([navigator.serviceWorker.ready,

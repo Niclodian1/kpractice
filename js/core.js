@@ -192,11 +192,20 @@ function symbolDataUrl(sym){
 }
 async function loadSymbol(sym){
   if (DATA && currentSym === sym) return DATA;
-  const r = await fetch(symbolDataUrl(sym));
-  if (!r.ok) throw new Error('K线加载失败');
-  DATA = await r.json();
-  currentSym = sym;
-  return DATA;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const r = await fetch(symbolDataUrl(sym), { signal: ctrl.signal });
+    if (!r.ok) throw new Error('K线加载失败');
+    DATA = await r.json();
+    currentSym = sym;
+    return DATA;
+  } catch (e){
+    if (e && e.name === 'AbortError') throw new Error('K线加载超时，请改选日线或先在离线数据里下载该品种');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function catSym(id){
