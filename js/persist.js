@@ -254,6 +254,10 @@ function groupTradesByPid(recs){
   return [...map.values()];
 }
 
+function sessionQualityText(q){
+  return q === 'good' ? '好题' : q === 'poor' ? '没意义' : '';
+}
+
 function csvEscape(v){
   return '"' + String(v ?? '').replace(/"/g, '""') + '"';
 }
@@ -319,7 +323,7 @@ function csvRowsForTrade(head, t){
 function buildTrainerCsv(){
   const sessions = tsLoad();
   const cols = [
-    'session_id','session_time','symbol','tf','start_time','steps','condition',
+    'session_id','session_time','symbol','tf','start_time','steps','condition','quality',
     'session_capital','session_end_capital','session_pnl',
     'pid','kind','lot','side','leverage','capital','time','price',
     'entry_time','entry','exit_time','exit_price',
@@ -334,7 +338,7 @@ function buildTrainerCsv(){
       session_time: s.ts ? new Date(s.ts).toISOString() : '',
       symbol: s.sym, tf: s.tf,
       start_time: s.startTs != null ? fmtTs(s.startTs, s.tf) : '',
-      steps: s.steps, condition: s.cond,
+      steps: s.steps, condition: s.cond, quality: sessionQualityText(s.quality),
       session_capital: s.capital, session_end_capital: s.endCapital, session_pnl: s.pnl,
     };
     const trades = groupTradesByPid(s.trades || []);

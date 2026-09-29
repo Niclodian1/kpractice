@@ -117,7 +117,7 @@ async function enterTrainer(){
         maxStep = Math.min(maxStep, Math.max(20, len - lookback - 5));
       }
       if (len < lookback + maxStep + 5) continue;
-      TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: INIT_CAPITAL }]; TR.revealed = false; TR.active = true;
+      TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: INIT_CAPITAL }]; TR.revealed = false; TR.active = true; TR.quality = '';
       if (typeof clearDrawings === 'function') clearDrawings();
       TR.startWallTs = Date.now();
       TR.sessionId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
@@ -242,8 +242,42 @@ function showAnswerBanner(){
     `<span>起点 <b>${fmtTimeReal(TR.startTs)}</b> · 走了 ${TR.step} 根 · ${TR.endReason || '—'}</span>` +
     `<span>开单 <b>${n}</b> 笔 · 本金 ${cap0.toLocaleString()}U → ${endCap.toLocaleString()}U</span>` +
     `<span>净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U（本金 ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%）</b></span>` +
-    equitySparkSvg(TR.curve);
+    equitySparkSvg(TR.curve) +
+    qualityPickerHtml(TR.quality);
   el.style.display = 'flex';
+}
+
+function qualityPickerHtml(quality){
+  const btn = (val, label) =>
+    `<button type="button" class="chip${quality === val ? ' active' : ''}" data-quality="${val}">${label}</button>`;
+  return `<div class="quality-rate">
+    <div class="logic-label">这局是好练习题吗？</div>
+    <div class="chips">${btn('good', '好题')}${btn('poor', '没意义')}</div>
+  </div>`;
+}
+
+function rateSession(quality, sessionId){
+  if (quality !== 'good' && quality !== 'poor') return;
+  const id = sessionId || reviewSession?.id || TR.sessionId;
+  if (!id) return;
+  const mine = String(reviewSession?.id || TR.sessionId) === String(id);
+  if (mine){
+    TR.quality = quality;
+    if (reviewSession) reviewSession.quality = quality;
+  }
+  const arr = tsLoad();
+  const s = arr.find(x => String(x.id) === String(id));
+  if (!s || s.quality === quality){
+    if (mine && document.getElementById('trainerBanner')?.style.display !== 'none' && (!reviewSession || reviewIndex < 0))
+      showAnswerBanner();
+    return;
+  }
+  s.quality = quality;
+  tsSave(arr);
+  persistFlush();
+  if (mine && document.getElementById('trainerBanner')?.style.display !== 'none' && (!reviewSession || reviewIndex < 0))
+    showAnswerBanner();
+  renderTrainerSessions();
 }
 
 function sessionTradeCount(){
@@ -309,6 +343,7 @@ function archiveSession(cond){
     pnl: +(endCap - cap0).toFixed(2),
     cond,
     reason: TR.endReason || cond,
+    quality: TR.quality || '',
     trades: TR.session.slice(),
     curve: (TR.curve || []).slice(),
   };
@@ -327,15 +362,18 @@ function renderTrainerSessions(){
   const box = document.getElementById('trHistory');
   if (!box) return;
   const arr = tsLoad();
+  const openId = box.querySelector('details[open]')?.dataset.tsid;
   document.getElementById('historyMore').hidden = arr.length <= historyLimit;
   if (!arr.length){ box.innerHTML = '<p class="hint">暂无历史练习局。</p>'; return; }
   box.innerHTML = arr.slice(0, historyLimit).map(s => {
     const trades = groupTradesByPid(s.trades || []);
+    const qText = sessionQualityText(s.quality);
     return `<details class="ts-item" data-tsid="${escapeHtml(s.id)}">
       <summary class="ts-head"><span>${escapeHtml(s.sym)} · ${escapeHtml(s.tf)} · ${new Date(s.ts).toLocaleDateString('zh-CN')}</span>
-      <span>${escapeHtml(s.reason || s.cond)} · ${trades.length} 笔 · <b style="color:${s.pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b></span></summary>
+      <span>${escapeHtml(s.reason || s.cond)}${qText ? ' · ' + qText : ''} · ${trades.length} 笔 · <b style="color:${s.pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b></span></summary>
       <div class="ts-detail"><div>本金 ${s.capital.toLocaleString()}U → ${s.endCapital.toLocaleString()}U · ${s.steps} 根</div>
       <div>最大回撤 ${maxDrawdown(s.curve).toFixed(2)}%</div>${equitySparkSvg(s.curve)}
+      ${qualityPickerHtml(s.quality)}
       <button class="btn" data-review="-1" type="button">回看本局 K 线</button>
       ${trades.map((trade, i) => `<button class="btn review-trade" data-review="${i}" type="button">
       <span>第 ${i + 1} 笔 · ${escapeHtml(trade.side)} · ${escapeHtml(trade.entry_time)} → ${escapeHtml(trade.exit_time)}</span>
@@ -343,6 +381,10 @@ function renderTrainerSessions(){
       <span>入场：${escapeHtml(trade.logic || '未记录')} · 出场：${escapeHtml(trade.exit_logic || trade.exit_reason || '未记录')}</span></button>`).join('')}
       </div></details>`;
   }).join('');
+  if (openId){
+    const el = box.querySelector(`.ts-item[data-tsid="${CSS.escape(openId)}"]`);
+    if (el) el.open = true;
+  }
 }
 
 function renderWeeklyCheckin(){
@@ -408,10 +450,22 @@ function setupTrainer(){
     document.getElementById('trMktSel').disabled = !!symSel.value;
   });
   document.getElementById('trHistory').addEventListener('click', e => {
+    const rate = e.target.closest('[data-quality]');
+    if (rate){
+      e.preventDefault();
+      e.stopPropagation();
+      const item = rate.closest('[data-tsid]');
+      if (item) rateSession(rate.dataset.quality, item.dataset.tsid);
+      return;
+    }
     const btn = e.target.closest('[data-review]');
     if (!btn) return;
     const id = btn.closest('[data-tsid]').dataset.tsid;
     openHistoryReview(id, Number(btn.dataset.review));
+  });
+  document.getElementById('trainerBanner').addEventListener('click', e => {
+    const rate = e.target.closest('[data-quality]');
+    if (rate) rateSession(rate.dataset.quality);
   });
   document.getElementById('historyMore').addEventListener('click', () => { historyLimit += 20; renderTrainerSessions(); });
   document.getElementById('tradeToggle').addEventListener('click', toggleTradeSheet);

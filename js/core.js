@@ -33,6 +33,7 @@ const TR = {
   LOOKBACK: 200,
   session: [],
   curve: [],
+  quality: '',
 };
 const trLocked = () => TR.active && !TR.revealed;
 

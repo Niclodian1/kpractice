@@ -118,6 +118,7 @@ async function openHistoryReview(id, index = -1){
     reviewIndex = index;
     Object.assign(TR, { active: true, revealed: true, sym: session.sym, tf: session.tf,
       startIdx, startTs: session.startTs, step: session.steps, maxStep: session.steps,
+      sessionId: session.id, quality: session.quality || '',
       session: session.trades || [], curve: session.curve || [], endCapital: session.endCapital, endReason: session.reason });
     activeTF = session.tf;
     replayT = null;

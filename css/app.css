@@ -305,6 +305,9 @@ input, select, textarea {
   max-height: 40%; overflow-y: auto;
 }
 #trainerBanner b { color: var(--ink); }
+.quality-rate { margin-top: 6px; }
+.quality-rate .chips { display: flex; }
+.quality-rate .chip { flex: 1; }
 
 .trade-sheet {
   position: fixed;
