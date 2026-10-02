@@ -80,11 +80,11 @@ function ensureCharts(){
   window.addEventListener('resize', () => requestAnimationFrame(alignPanes));
   chart.subscribeCrosshairMove(param => {
     const d = param.seriesData && param.seriesData.get(candleSeries);
-    if (!param.time || !d){
-      renderLegendBar(null);
+    if (param.point){
+      renderLegendBar(d || barAtTime(param.time), param);
       return;
     }
-    renderLegendBar(d, param);
+    renderLegendBar(candlesFor().slice(-1)[0] || null);
   });
 }
 
@@ -193,19 +193,38 @@ function renderLegendBar(d, param){
   } else ch.textContent = '';
   const last = cs.length ? cs[cs.length - 1] : null;
   if (dist && last){
-    let px = bar.close;
-    if (param && param.point){
+    let px = null;
+    if (param && param.point && candleSeries){
       const p = candleSeries.coordinateToPrice(param.point.y);
       if (p != null) px = p;
     }
+    if (px == null){ dist.textContent = ''; return; }
     const dp = px - last.close;
     const pp = last.close ? dp / last.close * 100 : 0;
-    const nb = cs.length - 1 - (i ?? cs.length - 1);
-    dist.textContent = param
-      ? `距最新 ${dp >= 0 ? '+' : ''}${fmt(dp)} (${pp >= 0 ? '+' : ''}${pp.toFixed(2)}%)${nb ? ` · ${nb}根` : ''}`
-      : '';
+    const nb = i == null ? 0 : cs.length - 1 - i;
+    dist.textContent = `距最新 ${dp >= 0 ? '+' : ''}${fmt(dp)} (${pp >= 0 ? '+' : ''}${pp.toFixed(2)}%)${nb ? ` · ${nb}根` : ''}`;
     dist.style.color = dp >= 0 ? 'var(--up)' : 'var(--down)';
   } else if (dist) dist.textContent = '';
+}
+function barAtTime(t){
+  const cs = candlesFor();
+  if (!cs.length) return null;
+  if (t == null) return cs[cs.length - 1];
+  let best = cs[0], bd = Math.abs(cs[0].time - t);
+  for (let i = 1; i < cs.length; i++){
+    const d = Math.abs(cs[i].time - t);
+    if (d < bd){ best = cs[i]; bd = d; }
+  }
+  return best;
+}
+function legendFromPointer(clientX, clientY){
+  if (!chart || !candleSeries) return;
+  const chartEl = document.getElementById('chart');
+  if (!chartEl) return;
+  const rect = chartEl.getBoundingClientRect();
+  const cx = clientX - rect.left, cy = clientY - rect.top;
+  if (cx < 0 || cy < 0 || cx > chartEl.clientWidth || cy > chartEl.clientHeight) return;
+  renderLegendBar(barAtTime(xToTime(cx)), { point: { x: cx, y: cy } });
 }
 function rawRefPrice(){
   const lv = L();
@@ -263,10 +282,79 @@ function applyTheme(){
 
 let drawTool = 'none';
 let drawPending = null;
+let drawPolyPts = [];
 const drawnLines = [];
 let drawRecs = [];
 let drawOverlayPrim = null;
 const refreshDrawOverlay = () => { if (drawOverlayPrim && drawOverlayPrim._req) drawOverlayPrim._req(); };
+const FIB_LEVELS = [
+  { r: 0, label: '0' },
+  { r: 0.236, label: '0.236' },
+  { r: 0.382, label: '0.382' },
+  { r: 0.5, label: '0.5' },
+  { r: 0.618, label: '0.618' },
+  { r: 0.786, label: '0.786' },
+  { r: 1, label: '1' },
+];
+function fibPrice(p1, p2, r){ return p2 + (p1 - p2) * r; }
+function toolHint(tool){
+  return tool === 'trend' ? '点两个点画趋势线'
+    : tool === 'sandr' ? '点一下画水平线'
+    : tool === 'fib' ? '点两个点画斐波那契回撤'
+    : tool === 'poly' ? '连续点选拐点，点完成结束'
+    : '';
+}
+function toolLabel(tool){
+  return tool === 'trend' ? '趋势线' : tool === 'sandr' ? '水平线'
+    : tool === 'fib' ? '斐波那契' : tool === 'poly' ? '折线' : '';
+}
+function syncDrawOverlay(){
+  window._trendLines = drawRecs.filter(r => r.type === 'trend');
+  window._fibs = drawRecs.filter(r => r.type === 'fib');
+  window._polys = drawRecs.filter(r => r.type === 'poly');
+  refreshDrawOverlay();
+}
+function setChartSettingsOpen(open){
+  const panel = document.getElementById('chartSettings');
+  const btn = document.getElementById('chartSettingsBtn');
+  if (!panel || !btn) return;
+  panel.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+  btn.textContent = open ? '收起' : '图表工具';
+  updateDrawDock();
+  requestAnimationFrame(alignPanes);
+}
+function updateDrawDock(){
+  const dock = document.getElementById('drawDock');
+  const panel = document.getElementById('chartSettings');
+  if (!dock) return;
+  const show = drawTool !== 'none' && (!panel || panel.hidden);
+  dock.hidden = !show;
+  const label = document.getElementById('drawDockLabel');
+  if (label){
+    const extra = drawTool === 'poly' && drawPolyPts.length
+      ? ` · 已点 ${drawPolyPts.length} 点` : (document.getElementById('drawHint')?.textContent || '');
+    label.textContent = show ? `${toolLabel(drawTool)}${extra ? ' · ' + extra : ''}` : '';
+  }
+  const fin = document.getElementById('drawDockFinish');
+  if (fin) fin.hidden = !(drawTool === 'poly' && drawPolyPts.length >= 2);
+}
+function setDrawTool(tool){
+  drawTool = tool || 'none';
+  drawPending = null;
+  drawPolyPts = [];
+  window._pendingTrend = null;
+  window._pendingFib = null;
+  window._pendingPoly = null;
+  document.querySelectorAll('#drawToggle [data-tool]').forEach(x =>
+    x.classList.toggle('active', x.dataset.tool === drawTool));
+  applyChartGestures();
+  setDrawHint(toolHint(drawTool));
+  const fin = document.getElementById('drawFinish');
+  if (fin) fin.hidden = true;
+  updateDrawDock();
+  refreshDrawOverlay();
+}
 
 function applyChartGestures(){
   if (!chart) return;
@@ -332,14 +420,22 @@ function addDrawnLine(rec){
 function clearDrawings(){
   drawRecs = [];
   drawPending = null;
+  drawPolyPts = [];
   window._pendingTrend = null;
+  window._pendingFib = null;
+  window._pendingPoly = null;
   window._trendLines = [];
+  window._fibs = [];
+  window._polys = [];
   while (drawnLines.length){
     const l = drawnLines.pop();
     try { candleSeries.removePriceLine(l.series); } catch {}
   }
   refreshDrawOverlay();
   setDrawHint('');
+  const fin = document.getElementById('drawFinish');
+  if (fin) fin.hidden = true;
+  updateDrawDock();
 }
 function attachDrawOverlay(){
   if (drawOverlayPrim || !candleSeries) return;
@@ -364,18 +460,66 @@ function attachDrawOverlay(){
           ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI * 2); ctx.fill();
           ctx.beginPath(); ctx.arc(x2, y2, 3, 0, Math.PI * 2); ctx.fill();
         }
+        const strokeSeg = (x1, y1, x2, y2, color, dash) => {
+          if (x1 == null || y1 == null || x2 == null || y2 == null) return;
+          ctx.strokeStyle = color;
+          ctx.setLineDash(dash || []);
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+          ctx.setLineDash([]);
+        };
+        const dot = (x, y, color) => {
+          if (x == null || y == null) return;
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+        };
+        const drawPoly = (pts, color, dash) => {
+          if (!pts || pts.length < 1) return;
+          ctx.strokeStyle = color;
+          ctx.setLineDash(dash || []);
+          ctx.beginPath();
+          pts.forEach((pt, i) => {
+            const x = X(pt.t), y = Y(pt.p);
+            if (x == null || y == null) return;
+            i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+          pts.forEach(pt => dot(X(pt.t), Y(pt.p), color));
+        };
+        const drawFib = (r, preview) => {
+          const x1 = X(r.t1), y1 = Y(r.p1), x2 = X(r.t2), y2 = Y(r.p2);
+          if (x1 == null || y1 == null || x2 == null || y2 == null) return;
+          const color = r.color || '#f5a623';
+          ctx.globalAlpha = preview ? 0.75 : 1;
+          strokeSeg(x1, y1, x2, y2, color, preview ? [6, 4] : []);
+          dot(x1, y1, color); dot(x2, y2, color);
+          const xa = Math.min(x1, x2), xb = Math.max(x1, x2) + 36;
+          ctx.font = `11px ${FONT}`;
+          ctx.textBaseline = 'middle';
+          for (const lv of FIB_LEVELS){
+            const price = fibPrice(r.p1, r.p2, lv.r);
+            const y = Y(price);
+            if (y == null) continue;
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = preview ? 0.45 : (lv.r === 0.618 ? 0.95 : 0.55);
+            ctx.setLineDash(lv.r === 0 || lv.r === 1 ? [] : [4, 3]);
+            ctx.beginPath(); ctx.moveTo(xa, y); ctx.lineTo(xb, y); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = color;
+            ctx.fillText(`${lv.label}  ${fmt(price)}`, xb + 4, y);
+          }
+          ctx.globalAlpha = 1;
+        };
         const pend = window._pendingTrend;
         if (pend){
-          const qx1 = X(pend.t1), qy1 = Y(pend.p1), qx2 = X(pend.t2), qy2 = Y(pend.p2);
-          if (qx1 != null && qy1 != null && qx2 != null && qy2 != null){
-            ctx.lineWidth = 2; ctx.strokeStyle = pend.color || '#4a90d9';
-            ctx.globalAlpha = 0.85; ctx.setLineDash([6, 4]);
-            ctx.beginPath(); ctx.moveTo(qx1, qy1); ctx.lineTo(qx2, qy2); ctx.stroke();
-            ctx.setLineDash([]); ctx.fillStyle = pend.color || '#4a90d9';
-            ctx.beginPath(); ctx.arc(qx2, qy2, 3, 0, Math.PI * 2); ctx.fill();
-            ctx.globalAlpha = 1;
-          }
+          strokeSeg(X(pend.t1), Y(pend.p1), X(pend.t2), Y(pend.p2), pend.color || '#4a90d9', [6, 4]);
+          dot(X(pend.t2), Y(pend.p2), pend.color || '#4a90d9');
         }
+        for (const r of (window._fibs || [])) drawFib(r, false);
+        if (window._pendingFib) drawFib(window._pendingFib, true);
+        for (const r of (window._polys || [])) drawPoly(r.points, r.color || '#4a90d9');
+        if (window._pendingPoly) drawPoly(window._pendingPoly.points, window._pendingPoly.color || '#4a90d9', [6, 4]);
       });
     }
   }
@@ -393,27 +537,33 @@ function attachDrawOverlay(){
   drawOverlayPrim = new DrawPrimitive(candleSeries, chart);
   candleSeries.attachPrimitive(drawOverlayPrim);
 }
+function finishPoly(){
+  if (drawPolyPts.length >= 2){
+    drawRecs.push({ type: 'poly', points: drawPolyPts.slice(), color: '#4a90d9' });
+    savePractice();
+  }
+  drawPolyPts = [];
+  window._pendingPoly = null;
+  syncDrawOverlay();
+  setDrawHint(toolHint('poly'));
+  const fin = document.getElementById('drawFinish');
+  if (fin) fin.hidden = true;
+  updateDrawDock();
+}
 function setupDrawing(){
   if (setupDrawing._ok) return;
   setupDrawing._ok = true;
-  document.querySelectorAll('#drawToggle button').forEach(b =>
-    b.addEventListener('click', () => {
-      drawTool = b.dataset.tool;
-      document.querySelectorAll('#drawToggle button').forEach(x => x.classList.toggle('active', x === b));
-      drawPending = null;
-      window._pendingTrend = null;
-      refreshDrawOverlay();
-      applyChartGestures();
-      setDrawHint(drawTool === 'trend' ? '点两个点画趋势线' : (drawTool === 'sandr' ? '点一下画水平线' : ''));
-    }));
+  document.querySelectorAll('#drawToggle [data-tool]').forEach(b =>
+    b.addEventListener('click', () => setDrawTool(b.dataset.tool)));
   document.getElementById('drawClear').addEventListener('click', () => {
     clearDrawings();
-    drawTool = 'none';
-    document.querySelectorAll('#drawToggle button').forEach(x =>
-      x.classList.toggle('active', x.dataset.tool === 'none'));
-    applyChartGestures();
+    setDrawTool('none');
     savePractice();
   });
+  document.getElementById('drawFinish').addEventListener('click', finishPoly);
+  document.getElementById('drawDockFinish').addEventListener('click', finishPoly);
+  document.getElementById('drawDockOff').addEventListener('click', () => setDrawTool('none'));
+  document.getElementById('drawDockOpen').addEventListener('click', () => setChartSettingsOpen(true));
   const chartEl = document.getElementById('chart');
   let downPos = null;
   const pick = (clientX, clientY) => {
@@ -427,20 +577,30 @@ function setupDrawing(){
     return { t: tRaw, p: drawPx(pRaw) };
   };
   chartEl.addEventListener('pointerdown', e => {
-    if (drawTool === 'none') return;
+    legendFromPointer(e.clientX, e.clientY);
     downPos = { x: e.clientX, y: e.clientY };
   });
   chartEl.addEventListener('pointermove', e => {
-    if (drawTool !== 'trend' || !drawPending) return;
+    legendFromPointer(e.clientX, e.clientY);
     const pt = pick(e.clientX, e.clientY);
     if (!pt) return;
-    window._pendingTrend = { t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#4a90d9' };
-    refreshDrawOverlay();
+    if (drawTool === 'trend' && drawPending){
+      window._pendingTrend = { t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#4a90d9' };
+      refreshDrawOverlay();
+    } else if (drawTool === 'fib' && drawPending){
+      window._pendingFib = { t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#f5a623' };
+      refreshDrawOverlay();
+    } else if (drawTool === 'poly' && drawPolyPts.length){
+      window._pendingPoly = { points: drawPolyPts.concat([pt]), color: '#4a90d9' };
+      refreshDrawOverlay();
+    }
   });
   chartEl.addEventListener('pointerup', e => {
-    if (drawTool === 'none' || !downPos) return;
-    if (Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y) > 8){ downPos = null; return; }
+    if (!downPos) return;
+    const moved = Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y) > 8;
     downPos = null;
+    legendFromPointer(e.clientX, e.clientY);
+    if (drawTool === 'none' || moved) return;
     const pt = pick(e.clientX, e.clientY);
     if (!pt) return;
     if (drawTool === 'sandr'){
@@ -448,21 +608,35 @@ function setupDrawing(){
       drawRecs.push(rec);
       addDrawnLine(rec);
       setDrawHint('水平线 ' + pt.p);
-    } else if (drawTool === 'trend'){
+      savePractice();
+    } else if (drawTool === 'trend' || drawTool === 'fib'){
       if (!drawPending){
         drawPending = pt;
         setDrawHint('再点终点');
+        updateDrawDock();
       } else {
-        const rec = { type: 'trend', t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#4a90d9' };
+        const rec = drawTool === 'fib'
+          ? { type: 'fib', t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#f5a623' }
+          : { type: 'trend', t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#4a90d9' };
         drawRecs.push(rec);
-        window._trendLines = drawRecs.filter(r => r.type === 'trend');
         drawPending = null;
         window._pendingTrend = null;
-        refreshDrawOverlay();
-        setDrawHint('');
+        window._pendingFib = null;
+        syncDrawOverlay();
+        setDrawHint(toolHint(drawTool));
+        updateDrawDock();
+        savePractice();
       }
+    } else if (drawTool === 'poly'){
+      drawPolyPts.push(pt);
+      window._pendingPoly = { points: drawPolyPts.slice(), color: '#4a90d9' };
+      refreshDrawOverlay();
+      const ready = drawPolyPts.length >= 2;
+      setDrawHint(ready ? '继续加点，或点完成' : '再点下一个拐点');
+      const fin = document.getElementById('drawFinish');
+      if (fin) fin.hidden = !ready;
+      updateDrawDock();
     }
-    savePractice();
   });
 }
 

@@ -18,13 +18,11 @@ function renderPositionSummary(){
 
 function restoreDrawings(records){
   clearDrawings();
-  drawTool = 'none';
-  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === 'none'));
+  setDrawTool('none');
   drawRecs = JSON.parse(JSON.stringify(records || []));
   drawRecs.forEach(addDrawnLine);
-  window._trendLines = drawRecs.filter(r => r.type === 'trend');
+  syncDrawOverlay();
   applyChartGestures();
-  refreshDrawOverlay();
 }
 
 async function resumePractice(){
@@ -179,12 +177,9 @@ function setupExperience(){
   document.getElementById('positionSummary').addEventListener('click', () => setTradeSheet(true));
   document.getElementById('reviewPrev').addEventListener('click', () => focusReviewTrade(reviewIndex - 1));
   document.getElementById('reviewNext').addEventListener('click', () => focusReviewTrade(reviewIndex + 1));
-  document.getElementById('chartSettingsBtn').addEventListener('click', e => {
+  document.getElementById('chartSettingsBtn').addEventListener('click', () => {
     const panel = document.getElementById('chartSettings');
-    panel.hidden = !panel.hidden;
-    e.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
-    if (panel.hidden && drawTool !== 'none') document.querySelector('[data-tool="none"]').click();
-    requestAnimationFrame(alignPanes);
+    setChartSettingsOpen(panel.hidden);
   });
   for (const id of ['trSymSel', 'trMktSel', 'trTfSel', 'trStepsInput']) document.getElementById(id).addEventListener('change', savePreferences);
   const resize = () => {

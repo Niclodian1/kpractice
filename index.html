@@ -103,6 +103,7 @@
   </section>
 
   <section id="practiceView" class="view" hidden>
+    <div class="chart-head">
     <div class="chart-toolbar">
       <div class="legend">
         <span class="legend-symbol">???</span>
@@ -130,9 +131,19 @@
         <button type="button" data-tool="none" class="active">画线关</button>
         <button type="button" data-tool="trend">趋势线</button>
         <button type="button" data-tool="sandr">水平线</button>
+        <button type="button" data-tool="fib">斐波那契</button>
+        <button type="button" data-tool="poly">折线</button>
       </div>
+      <button class="btn" id="drawFinish" type="button" hidden>完成</button>
       <button class="btn" id="drawClear" type="button">清线</button>
       <span id="drawHint" class="draw-hint"></span>
+    </div>
+    </div>
+    <div id="drawDock" hidden>
+      <span id="drawDockLabel"></span>
+      <button class="btn" id="drawDockFinish" type="button" hidden>完成</button>
+      <button class="btn" id="drawDockOff" type="button">关画线</button>
+      <button class="btn" id="drawDockOpen" type="button">工具</button>
     </div>
     </div>
     <div class="chart-box">

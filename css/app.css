@@ -421,13 +421,22 @@ input, select, textarea {
 body.trainer-blind #trMktSel,
 body.trainer-blind #trTfSel { display: none !important; }
 
+.chart-head { position: relative; z-index: 21; flex: 0 0 auto; }
 #chartSettings {
-  position: absolute; left: 0; right: 0; top: auto; z-index: 20;
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 22;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 0 0 12px 12px; box-shadow: 0 8px 20px #0004;
   max-height: calc(var(--app-height, 100dvh) - 160px); overflow: auto;
 }
-#practiceView > .chart-toolbar { height: auto; min-height: 44px; align-items: flex-start; }
+#drawDock {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 4px 8px; min-height: 44px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--ink-2);
+}
+#drawDock .btn { width: auto; min-height: 44px; padding: 4px 10px; }
+#drawDockLabel { flex: 1 1 auto; min-width: 0; }
+#practiceView .chart-toolbar { height: auto; min-height: 44px; align-items: flex-start; }
 .legend { max-height: none; overflow: visible; line-height: 1.35; }
 .legend-ohlc { flex: 1 1 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #chartSettingsBtn { flex-shrink: 0; }
