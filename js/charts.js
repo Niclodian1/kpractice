@@ -300,7 +300,7 @@ function fibPrice(p1, p2, r){ return p2 + (p1 - p2) * r; }
 function toolHint(tool){
   return tool === 'trend' ? '点两个点画趋势线'
     : tool === 'sandr' ? '点一下画水平线'
-    : tool === 'fib' ? '点两个点画斐波那契回撤'
+    : tool === 'fib' ? '按住移动对准，松手落第一个点'
     : tool === 'poly' ? '连续点选拐点，点完成结束'
     : '';
 }
@@ -346,6 +346,7 @@ function setDrawTool(tool){
   window._pendingTrend = null;
   window._pendingFib = null;
   window._pendingPoly = null;
+  window._drawCursor = null;
   document.querySelectorAll('#drawToggle [data-tool]').forEach(x =>
     x.classList.toggle('active', x.dataset.tool === drawTool));
   applyChartGestures();
@@ -424,6 +425,7 @@ function clearDrawings(){
   window._pendingTrend = null;
   window._pendingFib = null;
   window._pendingPoly = null;
+  window._drawCursor = null;
   window._trendLines = [];
   window._fibs = [];
   window._polys = [];
@@ -520,6 +522,42 @@ function attachDrawOverlay(){
         if (window._pendingFib) drawFib(window._pendingFib, true);
         for (const r of (window._polys || [])) drawPoly(r.points, r.color || '#4a90d9');
         if (window._pendingPoly) drawPoly(window._pendingPoly.points, window._pendingPoly.color || '#4a90d9', [6, 4]);
+        const cur = window._drawCursor;
+        if (cur){
+          const x = X(cur.t) ?? cur.x, y = Y(cur.p) ?? cur.y;
+          if (x != null && y != null){
+          const w = 4096;
+          const h = 4096;
+          ctx.save();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = '#f5a623';
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
+          ctx.fillStyle = '#f5a623';
+          ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+          const label = fmt(cur.p);
+          ctx.font = `12px ${FONT}`;
+          ctx.textBaseline = 'middle';
+          const tw = ctx.measureText(label).width;
+          const pad = 6;
+          const tagW = tw + pad * 2;
+          const tagH = 20;
+          const tagX = Math.min(Math.max(4, x - tagW / 2), Math.max(4, w - tagW - 4));
+          const tagY = y > 36 ? y - 30 : y + 16;
+          ctx.fillStyle = 'rgba(245,166,35,0.94)';
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(tagX, tagY - tagH / 2, tagW, tagH, 4);
+          else ctx.rect(tagX, tagY - tagH / 2, tagW, tagH);
+          ctx.fill();
+          ctx.fillStyle = '#111';
+          ctx.fillText(label, tagX + pad, tagY);
+          ctx.restore();
+          }
+        }
       });
     }
   }
@@ -574,11 +612,25 @@ function setupDrawing(){
     if (cx >= chartEl.clientWidth - axisW) return null;
     const tRaw = xToTime(cx), pRaw = cursorPrice(cy);
     if (tRaw == null || pRaw == null) return null;
-    return { t: tRaw, p: drawPx(pRaw) };
+    return { t: tRaw, p: drawPx(pRaw), x: cx, y: cy };
+  };
+  const trackFibCursor = pt => {
+    if (drawTool !== 'fib' || drawPending || !pt) return;
+    window._drawCursor = { t: pt.t, p: pt.p, x: pt.x, y: pt.y };
+    refreshDrawOverlay();
+  };
+  const clearFibCursor = () => {
+    if (!window._drawCursor) return;
+    window._drawCursor = null;
+    refreshDrawOverlay();
   };
   chartEl.addEventListener('pointerdown', e => {
     legendFromPointer(e.clientX, e.clientY);
     downPos = { x: e.clientX, y: e.clientY };
+    if (drawTool === 'fib' && !drawPending){
+      try { chartEl.setPointerCapture(e.pointerId); } catch {}
+      trackFibCursor(pick(e.clientX, e.clientY));
+    }
   });
   chartEl.addEventListener('pointermove', e => {
     legendFromPointer(e.clientX, e.clientY);
@@ -590,19 +642,39 @@ function setupDrawing(){
     } else if (drawTool === 'fib' && drawPending){
       window._pendingFib = { t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#f5a623' };
       refreshDrawOverlay();
+    } else if (drawTool === 'fib'){
+      trackFibCursor(pt);
     } else if (drawTool === 'poly' && drawPolyPts.length){
       window._pendingPoly = { points: drawPolyPts.concat([pt]), color: '#4a90d9' };
       refreshDrawOverlay();
     }
+  });
+  const endFibAim = e => {
+    if (drawTool === 'fib'){
+      try { chartEl.releasePointerCapture(e.pointerId); } catch {}
+    }
+  };
+  chartEl.addEventListener('pointercancel', e => {
+    downPos = null;
+    clearFibCursor();
+    endFibAim(e);
   });
   chartEl.addEventListener('pointerup', e => {
     if (!downPos) return;
     const moved = Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y) > 8;
     downPos = null;
     legendFromPointer(e.clientX, e.clientY);
-    if (drawTool === 'none' || moved) return;
+    endFibAim(e);
+    const fibAim = drawTool === 'fib' && !drawPending;
+    if (drawTool === 'none' || (moved && !fibAim)){
+      if (fibAim) clearFibCursor();
+      return;
+    }
     const pt = pick(e.clientX, e.clientY);
-    if (!pt) return;
+    if (!pt){
+      clearFibCursor();
+      return;
+    }
     if (drawTool === 'sandr'){
       const rec = { type: 'sandr', p: pt.p, color: '#f5a623' };
       drawRecs.push(rec);
@@ -612,8 +684,10 @@ function setupDrawing(){
     } else if (drawTool === 'trend' || drawTool === 'fib'){
       if (!drawPending){
         drawPending = pt;
+        window._drawCursor = null;
         setDrawHint('再点终点');
         updateDrawDock();
+        refreshDrawOverlay();
       } else {
         const rec = drawTool === 'fib'
           ? { type: 'fib', t1: drawPending.t, p1: drawPending.p, t2: pt.t, p2: pt.p, color: '#f5a623' }
@@ -622,6 +696,7 @@ function setupDrawing(){
         drawPending = null;
         window._pendingTrend = null;
         window._pendingFib = null;
+        window._drawCursor = null;
         syncDrawOverlay();
         setDrawHint(toolHint(drawTool));
         updateDrawDock();
