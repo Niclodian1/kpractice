@@ -36,7 +36,13 @@ async function resumePractice(){
     const startIdx = candles?.findIndex(c => c[0] === snapshot.tr.startTs) ?? -1;
     const cursor = candles?.findIndex(c => c[0] === snapshot.replayT) ?? -1;
     if (startIdx < 0 || cursor !== startIdx + snapshot.tr.step) throw new Error('当前数据无法对应原进度，请重新下载该品种后重试');
-    Object.assign(TR, snapshot.tr, { startIdx, active: true, revealed: false });
+    Object.assign(TR, snapshot.tr, {
+      startIdx, active: true, revealed: false,
+      durationMs: snapshot.tr.durationMs || 0,
+      clockAt: Date.now(),
+      signals: Array.isArray(snapshot.tr.signals) ? snapshot.tr.signals : [],
+      initCapital: snapshot.tr.initCapital || INIT_CAPITAL,
+    });
     activeTF = TR.tf;
     replayT = snapshot.replayT;
     positions = snapshot.positions;
@@ -70,15 +76,6 @@ async function resumePractice(){
   }
 }
 
-function maxDrawdown(curve){
-  let peak = 0, max = 0;
-  for (const point of curve || []){
-    peak = Math.max(peak, point.eq);
-    if (peak > 0) max = Math.max(max, (peak - point.eq) / peak * 100);
-  }
-  return max;
-}
-
 function renderLogicStats(){
   const el = document.getElementById('logicStats');
   if (!el) return;
@@ -96,10 +93,30 @@ function renderLogicStats(){
   }
   if (!sessions.length){ el.textContent = ''; return; }
   const drawdown = sessions.reduce((n, s) => Math.max(n, maxDrawdown(s.curve)), 0);
+  const withSig = sessions.filter(s => sessionSignals(s).length);
+  const noSig = sessions.filter(s => !sessionSignals(s).length);
+  const avgPct = arr => arr.length ? arr.reduce((n, s) => n + sessionPnlPct(s), 0) / arr.length : 0;
+  let watchNoEntry = 0, signalEntry = 0;
+  for (const s of sessions){
+    const entryTs = new Set();
+    for (const t of s.trades || []){
+      if (t.entry_ts != null) entryTs.add(t.entry_ts);
+      for (const ts of t.entry_ts_list || []) entryTs.add(ts);
+    }
+    for (const g of sessionSignals(s)){
+      if (entryTs.has(g.t)) signalEntry++;
+      else watchNoEntry++;
+    }
+  }
   el.innerHTML = `<details><summary>按开单逻辑复盘 · 历史单局最大回撤 ${drawdown.toFixed(2)}%</summary>
     <p class="hint">基于已保存且完成的练习；多选逻辑分别计入各分类。</p>
     ${[...groups].sort((a, b) => b[1].n - a[1].n).map(([label, g]) =>
-      `<div>${escapeHtml(label)}：${g.n} 笔 · 胜率 ${(g.wins / g.n * 100).toFixed(0)}% · ${g.pnl.toFixed(1)}U</div>`).join('')}</details>`;
+      `<div>${escapeHtml(label)}：${g.n} 笔 · 胜率 ${(g.wins / g.n * 100).toFixed(0)}% · ${g.pnl.toFixed(1)}U</div>`).join('')}
+    <p class="hint">有无信号K</p>
+    <div>有信号K：${withSig.length} 局 · 平均盈亏 ${avgPct(withSig) >= 0 ? '+' : ''}${avgPct(withSig).toFixed(2)}%</div>
+    <div>无信号K：${noSig.length} 局 · 平均盈亏 ${avgPct(noSig) >= 0 ? '+' : ''}${avgPct(noSig).toFixed(2)}%</div>
+    <div>信号K上进场 ${signalEntry} 次 · 信号后观察未进 ${watchNoEntry} 次</div>
+    </details>`;
 }
 
 async function openHistoryReview(id, index = -1){
@@ -117,6 +134,10 @@ async function openHistoryReview(id, index = -1){
     Object.assign(TR, { active: true, revealed: true, sym: session.sym, tf: session.tf,
       startIdx, startTs: session.startTs, step: session.steps, maxStep: session.steps,
       sessionId: session.id, quality: session.quality || '',
+      structure: session.structure || '', turn: session.turn || '',
+      durationMs: session.durationMs || 0, clockAt: 0,
+      signals: JSON.parse(JSON.stringify(session.signals || [])),
+      initCapital: session.capital || INIT_CAPITAL,
       session: session.trades || [], curve: session.curve || [], endCapital: session.endCapital, endReason: session.reason });
     activeTF = session.tf;
     replayT = null;
@@ -181,7 +202,7 @@ function setupExperience(){
     const panel = document.getElementById('chartSettings');
     setChartSettingsOpen(panel.hidden);
   });
-  for (const id of ['trSymSel', 'trMktSel', 'trTfSel', 'trStepsInput']) document.getElementById(id).addEventListener('change', savePreferences);
+  for (const id of ['trSymSel', 'trMktSel', 'trTfSel', 'trStepsInput', 'trCapitalInput']) document.getElementById(id).addEventListener('change', savePreferences);
   const resize = () => {
     const viewport = window.visualViewport;
     document.documentElement.style.setProperty('--app-height', `${viewport?.height || innerHeight}px`);
@@ -196,6 +217,6 @@ function setupExperience(){
   new ResizeObserver(resize).observe(document.getElementById('trainerCtl'));
   resize();
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') setTradeSheet(false);
+    if (e.key === 'Escape'){ setTradeSheet(false); setObserveSheet(false); }
   });
 }

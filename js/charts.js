@@ -158,6 +158,12 @@ function buildMarkers(){
         text: `#${e.pid}${e.isAdd ? '+' : ''}`, size: 0.5 });
     }
   });
+  for (const g of TR.signals || []){
+    out.push({
+      time: g.t, position: 'aboveBar', color: '#f5a623',
+      shape: 'circle', text: g.note ? '观' : '信', size: 1,
+    });
+  }
   out.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
   return out;
 }

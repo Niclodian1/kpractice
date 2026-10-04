@@ -3,16 +3,16 @@
 const curModeKey = () => (TR.active && !TR.revealed) ? 'trainer' : 'replay';
 const acctBal = () => {
   const a = acctLoad(), m = curModeKey();
-  return typeof a[m] === 'number' ? a[m] : INIT_CAPITAL;
+  return typeof a[m] === 'number' ? a[m] : sessionCapital();
 };
 const acctAdj = d => {
   const a = acctLoad(), m = curModeKey();
-  const base = typeof a[m] === 'number' ? a[m] : INIT_CAPITAL;
+  const base = typeof a[m] === 'number' ? a[m] : sessionCapital();
   a[m] = +(base + d).toFixed(6);
   acctSave(a);
   persistFlush();
 };
-const acctReset = () => { const a = acctLoad(); a[curModeKey()] = INIT_CAPITAL; acctSave(a); persistFlush(); };
+const acctReset = () => { const a = acctLoad(); a[curModeKey()] = sessionCapital(); acctSave(a); persistFlush(); };
 
 let positions = [];
 let posSeq = 1;
@@ -111,12 +111,13 @@ function recordEquity(){
   if (curve) curve.innerHTML = equitySparkSvg(TR.curve);
   savePractice();
 }
-function equitySparkSvg(curve, w, h){
+function equitySparkSvg(curve, w, h, cap0){
   w = w || 280; h = h || 56;
+  cap0 = cap0 == null ? sessionCapital() : cap0;
   if (!curve || curve.length < 2) return '';
   const ys = curve.map(p => p.eq);
-  const min = Math.min(...ys, INIT_CAPITAL);
-  const max = Math.max(...ys, INIT_CAPITAL);
+  const min = Math.min(...ys, cap0);
+  const max = Math.max(...ys, cap0);
   const span = max - min || 1;
   const n = curve.length;
   const pts = curve.map((p, i) => {
@@ -125,8 +126,8 @@ function equitySparkSvg(curve, w, h){
     return x.toFixed(1) + ',' + y.toFixed(1);
   }).join(' ');
   const last = ys[ys.length - 1];
-  const col = last >= INIT_CAPITAL ? 'var(--up)' : 'var(--down)';
-  const y0 = h - (INIT_CAPITAL - min) / span * (h - 6) - 3;
+  const col = last >= cap0 ? 'var(--up)' : 'var(--down)';
+  const y0 = h - (cap0 - min) / span * (h - 6) - 3;
   return `<svg class="eq-spark" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">
     <line x1="0" y1="${y0.toFixed(1)}" x2="${w}" y2="${y0.toFixed(1)}" stroke="var(--border)" stroke-dasharray="4 3"/>
     <polyline fill="none" stroke="${col}" stroke-width="1.7" points="${pts}"/>
@@ -146,7 +147,8 @@ function renderJournal(){
   const cashUsed = mine.reduce((a, p) => a + posCashCapital(p), 0);
   const addUsed = mine.reduce((a, p) => a + posFloatAddCapital(p), 0);
   const eq = acctEquity();
-  const eqCol = eq > INIT_CAPITAL ? 'var(--up)' : (eq < INIT_CAPITAL ? 'var(--down)' : 'var(--ink-2)');
+  const cap0 = sessionCapital();
+  const eqCol = eq > cap0 ? 'var(--up)' : (eq < cap0 ? 'var(--down)' : 'var(--ink-2)');
   html += `<div data-acct style="border:1px dashed var(--border);border-radius:8px;padding:8px;margin-top:6px;font-size:12px;">
     可用 <b data-abal>${acctBal().toFixed(2)}U</b> · 占用 <span data-aused>${cashUsed.toFixed(0)}</span>U${addUsed ? ` · 浮盈加仓 ${addUsed.toFixed(0)}U` : ''}<br>
     浮动 <span data-fsum style="font-weight:700;color:${floatSum >= 0 ? 'var(--up)' : 'var(--down)'}">${floatSum >= 0 ? '+' : ''}${floatSum.toFixed(2)}U</span>
@@ -229,7 +231,8 @@ function updateLivePnl(){
     }
     if (eqEl){
       eqEl.textContent = eq.toFixed(2) + 'U';
-      eqEl.style.color = eq > INIT_CAPITAL ? 'var(--up)' : (eq < INIT_CAPITAL ? 'var(--down)' : '');
+      const cap0 = sessionCapital();
+      eqEl.style.color = eq > cap0 ? 'var(--up)' : (eq < cap0 ? 'var(--down)' : '');
     }
   }
   for (const pos of positions){

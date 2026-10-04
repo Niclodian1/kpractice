@@ -70,6 +70,10 @@
       <label>步数
         <input id="trStepsInput" type="number" inputmode="numeric" value="200" min="20" max="500">
       </label>
+      <label>初始本金U
+        <input id="trCapitalInput" type="number" inputmode="decimal" value="100000" min="100" step="100">
+      </label>
+      <p class="hint">默认 100,000U。只影响本局账户，不改历史记录。</p>
       <button class="btn primary" id="trainerBtn" type="button">开始练习</button>
     </div>
 
@@ -201,13 +205,42 @@
       </div>
     </div>
 
-    <div class="trainer-bar" id="trainerCtl">
+    <div id="trainerCtl" class="trainer-ctl">
+    <div class="trainer-mark" id="signalBar" hidden>
+      <button class="btn" id="signalBtn" type="button">信号K</button>
+      <button class="btn" id="observeBtn" type="button">观察</button>
+    </div>
+    <div class="trainer-bar">
       <span class="progress" id="trainerProgress">0/200</span>
       <button class="btn" id="tradeToggle" type="button">交易</button>
       <button class="btn primary" id="trainerNext" type="button">下一根</button>
       <button class="btn" id="trainerQuit" type="button">放弃</button>
       <button class="btn" id="trainerEnd" type="button" hidden>结束</button>
       <button class="btn primary" id="trainerAgain" type="button" hidden>再来一局</button>
+    </div>
+    </div>
+
+    <div id="observeSheet" class="trade-sheet" hidden>
+      <div class="sheet-backdrop" id="observeBackdrop"></div>
+      <div class="sheet-panel observe-panel" role="dialog" aria-label="信号K观察">
+        <div class="sheet-grab">
+          <span class="grab-bar"></span>
+          <button class="btn" id="observeClose" type="button">关闭</button>
+        </div>
+        <div class="trade-dock">
+          <h3>信号K观察</h3>
+          <p class="hint" id="observeBarLabel">当前K线</p>
+          <p class="hint">信号出现后重点观察。不符合入场条件也可以记下原因，方便复盘有无信号K对交易的影响。</p>
+          <label>观察备注
+            <textarea id="observeNote" rows="3" placeholder="例如：放量突破但回踩不够，先观察不进"></textarea>
+          </label>
+          <div class="row-btns">
+            <button class="btn primary" id="observeSave" type="button">保存观察</button>
+            <button class="btn" id="observeSkip" type="button">只标信号</button>
+            <button class="btn" id="observeClear" type="button">取消这根信号</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 </div>

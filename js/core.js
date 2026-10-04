@@ -34,6 +34,12 @@ const TR = {
   session: [],
   curve: [],
   quality: '',
+  structure: '',
+  turn: '',
+  signals: [],
+  durationMs: 0,
+  clockAt: 0,
+  initCapital: 0,
 };
 const trLocked = () => TR.active && !TR.revealed;
 

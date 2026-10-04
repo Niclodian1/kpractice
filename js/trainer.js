@@ -4,6 +4,7 @@ const randInt = n => Math.floor(Math.random() * n);
 
 function showHome(){
   setTradeSheet(false);
+  setObserveSheet(false);
   document.getElementById('homeView').hidden = false;
   document.getElementById('practiceView').hidden = true;
   refreshOfflineStatus();
@@ -117,11 +118,14 @@ async function enterTrainer(){
         maxStep = Math.min(maxStep, Math.max(20, len - lookback - 5));
       }
       if (len < lookback + maxStep + 5) continue;
-      TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: INIT_CAPITAL }]; TR.revealed = false; TR.active = true; TR.quality = '';
+      TR.initCapital = readStartCapital();
+      TR.step = 0; TR.session = []; TR.curve = [{ step: 0, eq: TR.initCapital }];
+      TR.revealed = false; TR.active = true; TR.quality = ''; TR.structure = ''; TR.turn = '';
+      TR.signals = []; TR.durationMs = 0; TR.clockAt = Date.now();
       if (typeof clearDrawings === 'function') clearDrawings();
       TR.startWallTs = Date.now();
       TR.sessionId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-      TR.endCapital = INIT_CAPITAL;
+      TR.endCapital = TR.initCapital;
       acctReset();
       activeTF = tf;
       TR.sym = meta.id; TR.tf = tf;
@@ -180,6 +184,8 @@ function trainerStep(){
 
 function revealTrainer(auto, note){
   if (!TR.active || TR.revealed) return;
+  flushPracticeClock();
+  TR.clockAt = 0;
   while (positions.length) closePosObj(positions[0], 1, auto ? '步数走满, 按现价强平' : '结束练习, 按现价强平', undefined, true, { silent: true });
   const endCapital = acctBal();
   TR.endReason = (note && String(note).includes('爆仓')) ? '账户爆仓'
@@ -202,6 +208,7 @@ function revealTrainer(auto, note){
 
 function endTrainer(){
   reviewSession = null;
+  setObserveSheet(false);
   document.getElementById('reviewNav').hidden = true;
   TR.active = false; TR.revealed = false; TR.session = []; TR.curve = []; TR.startTs = null;
   replayT = null;
@@ -220,6 +227,8 @@ function quitTrainer(){
   if (!TR.active) return;
   if (TR.revealed){ endTrainer(); return; }
   if (!confirm('放弃本次练习? 未平仓仓位退还保证金；本局标记为「放弃」')) return;
+  flushPracticeClock();
+  TR.clockAt = 0;
   for (const p of positions) acctAdj(posCashCapital(p));
   positions = [];
   TR.endCapital = acctBal();
@@ -233,51 +242,114 @@ function showAnswerBanner(){
   const el = document.getElementById('trainerBanner');
   const grouped = groupTradesByPid(TR.session);
   const n = grouped.length;
-  const cap0 = INIT_CAPITAL;
+  const cap0 = sessionCapital();
   const endCap = typeof TR.endCapital === 'number' ? TR.endCapital : acctBal();
   const tot = +(endCap - cap0).toFixed(2);
   const pct = cap0 ? tot / cap0 * 100 : 0;
+  const dd = maxDrawdown(TR.curve);
   el.innerHTML =
     `<b>本局答案：${DATA.meta.symbol} · ${TR.tf}</b>` +
-    `<span>起点 <b>${fmtTimeReal(TR.startTs)}</b> · 走了 ${TR.step} 根 · ${TR.endReason || '—'}</span>` +
+    `<span>起点 <b>${fmtTimeReal(TR.startTs)}</b> · 走了 ${TR.step} 根 · ${TR.endReason || '—'} · 用时 ${formatDuration(TR.durationMs)}</span>` +
     `<span>开单 <b>${n}</b> 笔 · 本金 ${cap0.toLocaleString()}U → ${endCap.toLocaleString()}U</span>` +
-    `<span>净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U（本金 ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%）</b></span>` +
-    equitySparkSvg(TR.curve) +
-    qualityPickerHtml(TR.quality);
+    `<span>净 <b style="color:${tot >= 0 ? 'var(--up)' : 'var(--down)'}">${tot >= 0 ? '+' : ''}${tot.toFixed(1)}U（${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%）</b> · 最大回撤 ${dd.toFixed(2)}%</span>` +
+    equitySparkSvg(TR.curve, 280, 56, cap0) +
+    signalListHtml(TR.signals, TR.tf) +
+    sessionTagPickerHtml(TR);
   el.style.display = 'flex';
 }
 
-function qualityPickerHtml(quality){
-  const btn = (val, label) =>
-    `<button type="button" class="chip${quality === val ? ' active' : ''}" data-quality="${val}">${label}</button>`;
+function chipBtn(field, val, label, current){
+  return `<button type="button" class="chip${current === val ? ' active' : ''}" data-tag="${field}" data-val="${escapeHtml(val)}">${escapeHtml(label)}</button>`;
+}
+function sessionTagPickerHtml(s){
   return `<div class="quality-rate">
     <div class="logic-label">这局是好练习题吗？</div>
-    <div class="chips">${btn('good', '好题')}${btn('poor', '没意义')}</div>
+    <div class="chips">${chipBtn('quality', 'good', '好题', s.quality)}${chipBtn('quality', 'poor', '没意义', s.quality)}</div>
+    <div class="logic-label">题目结构（可选）</div>
+    <div class="chips tag-row">${STRUCTURE_TAGS.map(v => chipBtn('structure', v, v, s.structure)).join('')}</div>
+    <div class="logic-label">趋势转换（可选）</div>
+    <div class="chips tag-row">${TURN_TAGS.map(v => chipBtn('turn', v, v, s.turn)).join('')}</div>
   </div>`;
 }
+function signalListHtml(signals, tf){
+  const list = sessionSignals({ signals });
+  if (!list.length) return '<p class="hint">本局未标记信号K</p>';
+  return `<div class="signal-list"><div class="logic-label">信号K ${list.length} 根</div>${
+    list.map(g => `<div>${escapeHtml(fmtTs(g.t, tf))} · ${g.note ? escapeHtml(g.note) : '已标记，无观察备注'}</div>`).join('')
+  }</div>`;
+}
 
-function rateSession(quality, sessionId){
-  if (quality !== 'good' && quality !== 'poor') return;
+function rateSession(field, value, sessionId){
+  const allowed = {
+    quality: ['good', 'poor'],
+    structure: STRUCTURE_TAGS,
+    turn: TURN_TAGS,
+  };
+  if (!allowed[field] || (value && !allowed[field].includes(value))) return;
   const id = sessionId || reviewSession?.id || TR.sessionId;
   if (!id) return;
   const mine = String(reviewSession?.id || TR.sessionId) === String(id);
-  if (mine){
-    TR.quality = quality;
-    if (reviewSession) reviewSession.quality = quality;
-  }
   const arr = tsLoad();
   const s = arr.find(x => String(x.id) === String(id));
-  if (!s || s.quality === quality){
+  const next = s && s[field] === value ? '' : value;
+  if (mine){
+    TR[field] = next;
+    if (reviewSession) reviewSession[field] = next;
+  }
+  if (!s){
     if (mine && document.getElementById('trainerBanner')?.style.display !== 'none' && (!reviewSession || reviewIndex < 0))
       showAnswerBanner();
     return;
   }
-  s.quality = quality;
+  if (s[field] === next){
+    if (mine && document.getElementById('trainerBanner')?.style.display !== 'none' && (!reviewSession || reviewIndex < 0))
+      showAnswerBanner();
+    return;
+  }
+  s[field] = next;
   tsSave(arr);
   persistFlush();
   if (mine && document.getElementById('trainerBanner')?.style.display !== 'none' && (!reviewSession || reviewIndex < 0))
     showAnswerBanner();
   renderTrainerSessions();
+}
+
+function currentSignal(){
+  const bar = curBar();
+  if (!bar || !Array.isArray(TR.signals)) return null;
+  return TR.signals.find(s => s.t === bar.time) || null;
+}
+function upsertSignal(note, opts = {}){
+  const bar = curBar();
+  if (!bar || !trLocked()) return;
+  if (!Array.isArray(TR.signals)) TR.signals = [];
+  if (opts.remove){
+    TR.signals = TR.signals.filter(s => s.t !== bar.time);
+  } else {
+    const prev = TR.signals.find(s => s.t === bar.time);
+    if (prev) prev.note = note || '';
+    else TR.signals.push({ t: bar.time, note: note || '' });
+    TR.signals.sort((a, b) => a.t - b.t);
+  }
+  if (typeof applySeries === 'function') applySeries();
+  updateTrainerUI();
+  savePractice();
+}
+function setObserveSheet(on){
+  const sheet = document.getElementById('observeSheet');
+  if (sheet) sheet.hidden = !on;
+  if (on){
+    const bar = curBar();
+    document.getElementById('observeBarLabel').textContent = bar
+      ? `当前 ${fmtTime(bar.time)}  O ${fmt(bar.open)} H ${fmt(bar.high)} L ${fmt(bar.low)} C ${fmt(bar.close)}`
+      : '当前K线';
+    document.getElementById('observeNote').value = currentSignal()?.note || '';
+  }
+}
+function openObserveSheet(){
+  if (!trLocked() || !curBar()) return;
+  if (!currentSignal()) upsertSignal('');
+  setObserveSheet(true);
 }
 
 function sessionTradeCount(){
@@ -298,6 +370,14 @@ function updateTrainerUI(){
   document.getElementById('trainerAgain').hidden = !(TR.active && TR.revealed) || !!reviewSession;
   document.getElementById('tradeToggle').hidden = !inRun;
   document.getElementById('positionSummary').hidden = !inRun;
+  const signalBar = document.getElementById('signalBar');
+  if (signalBar) signalBar.hidden = !inRun;
+  const sig = currentSignal();
+  const signalBtn = document.getElementById('signalBtn');
+  if (signalBtn){
+    signalBtn.classList.toggle('active', !!sig);
+    signalBtn.textContent = sig ? (sig.note ? '信号·观' : '信号K') : '信号K';
+  }
   const tradeBtn = document.getElementById('tradeToggle');
   if (tradeBtn){
     const nPos = positions.length;
@@ -328,7 +408,7 @@ function recordSession(){
 
 function archiveSession(cond){
   if (!TR.sym) return;
-  const cap0 = INIT_CAPITAL;
+  const cap0 = sessionCapital();
   const endCap = typeof TR.endCapital === 'number' ? TR.endCapital : acctBal();
   const s = {
     id: TR.sessionId || Date.now(),
@@ -344,6 +424,10 @@ function archiveSession(cond){
     cond,
     reason: TR.endReason || cond,
     quality: TR.quality || '',
+    structure: TR.structure || '',
+    turn: TR.turn || '',
+    durationMs: TR.durationMs || 0,
+    signals: JSON.parse(JSON.stringify(TR.signals || [])),
     trades: TR.session.slice(),
     curve: (TR.curve || []).slice(),
   };
@@ -368,12 +452,16 @@ function renderTrainerSessions(){
   box.innerHTML = arr.slice(0, historyLimit).map(s => {
     const trades = groupTradesByPid(s.trades || []);
     const qText = sessionQualityText(s.quality);
+    const pct = sessionPnlPct(s);
+    const dd = maxDrawdown(s.curve);
+    const tags = [qText, s.structure, s.turn].filter(Boolean).join(' · ');
     return `<details class="ts-item" data-tsid="${escapeHtml(s.id)}">
       <summary class="ts-head"><span>${escapeHtml(s.sym)} · ${escapeHtml(s.tf)} · ${new Date(s.ts).toLocaleDateString('zh-CN')}</span>
-      <span>${escapeHtml(s.reason || s.cond)}${qText ? ' · ' + qText : ''} · ${trades.length} 笔 · <b style="color:${s.pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U</b></span></summary>
-      <div class="ts-detail"><div>本金 ${s.capital.toLocaleString()}U → ${s.endCapital.toLocaleString()}U · ${s.steps} 根</div>
-      <div>最大回撤 ${maxDrawdown(s.curve).toFixed(2)}%</div>${equitySparkSvg(s.curve)}
-      ${qualityPickerHtml(s.quality)}
+      <span>${escapeHtml(s.reason || s.cond)}${tags ? ' · ' + escapeHtml(tags) : ''} · ${trades.length} 笔 · <b style="color:${s.pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${s.pnl >= 0 ? '+' : ''}${s.pnl.toFixed(1)}U（${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%）</b> · 回撤 ${dd.toFixed(1)}%</span></summary>
+      <div class="ts-detail"><div>本金 ${(s.capital || 0).toLocaleString()}U → ${(s.endCapital || 0).toLocaleString()}U · ${s.steps} 根 · 用时 ${formatDuration(s.durationMs)}</div>
+      <div>最终盈亏 ${pct >= 0 ? '+' : ''}${pct.toFixed(2)}% · 最大回撤 ${dd.toFixed(2)}%</div>${equitySparkSvg(s.curve, 280, 56, s.capital)}
+      ${signalListHtml(s.signals, s.tf)}
+      ${sessionTagPickerHtml(s)}
       <button class="btn" data-review="-1" type="button">回看本局 K 线</button>
       ${trades.map((trade, i) => `<button class="btn review-trade" data-review="${i}" type="button">
       <span>第 ${i + 1} 笔 · ${escapeHtml(trade.side)} · ${escapeHtml(trade.entry_time)} → ${escapeHtml(trade.exit_time)}</span>
@@ -450,12 +538,12 @@ function setupTrainer(){
     document.getElementById('trMktSel').disabled = !!symSel.value;
   });
   document.getElementById('trHistory').addEventListener('click', e => {
-    const rate = e.target.closest('[data-quality]');
+    const rate = e.target.closest('[data-tag]');
     if (rate){
       e.preventDefault();
       e.stopPropagation();
       const item = rate.closest('[data-tsid]');
-      if (item) rateSession(rate.dataset.quality, item.dataset.tsid);
+      if (item) rateSession(rate.dataset.tag, rate.dataset.val, item.dataset.tsid);
       return;
     }
     const btn = e.target.closest('[data-review]');
@@ -464,8 +552,28 @@ function setupTrainer(){
     openHistoryReview(id, Number(btn.dataset.review));
   });
   document.getElementById('trainerBanner').addEventListener('click', e => {
-    const rate = e.target.closest('[data-quality]');
-    if (rate) rateSession(rate.dataset.quality);
+    const rate = e.target.closest('[data-tag]');
+    if (rate) rateSession(rate.dataset.tag, rate.dataset.val);
+  });
+  document.getElementById('signalBtn').addEventListener('click', () => {
+    if (!currentSignal()) upsertSignal('');
+    else openObserveSheet();
+    updateTrainerUI();
+  });
+  document.getElementById('observeBtn').addEventListener('click', openObserveSheet);
+  document.getElementById('observeClose').addEventListener('click', () => setObserveSheet(false));
+  document.getElementById('observeBackdrop').addEventListener('click', () => setObserveSheet(false));
+  document.getElementById('observeSave').addEventListener('click', () => {
+    upsertSignal(document.getElementById('observeNote').value.trim());
+    setObserveSheet(false);
+  });
+  document.getElementById('observeSkip').addEventListener('click', () => {
+    upsertSignal(currentSignal()?.note || '');
+    setObserveSheet(false);
+  });
+  document.getElementById('observeClear').addEventListener('click', () => {
+    upsertSignal('', { remove: true });
+    setObserveSheet(false);
   });
   document.getElementById('historyMore').addEventListener('click', () => { historyLimit += 20; renderTrainerSessions(); });
   document.getElementById('tradeToggle').addEventListener('click', toggleTradeSheet);
@@ -498,8 +606,11 @@ function setupTrainer(){
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); trainerStep(); }
   });
-  window.addEventListener('pagehide', savePractice);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) savePractice(); });
+  window.addEventListener('pagehide', () => { pausePracticeClock(); savePractice(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden){ pausePracticeClock(); savePractice(); }
+    else resumePracticeClock();
+  });
   renderTrainerStats();
   renderTrainerSessions();
   renderWeeklyCheckin();

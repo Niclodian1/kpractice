@@ -4,6 +4,43 @@ const TRKEY = 'kpractice_stats_v1';
 const TSKEY = 'kpractice_sessions_v1';
 const ACCT_KEY = 'kpractice_account_v1';
 const INIT_CAPITAL = 100000;
+const STRUCTURE_TAGS = ['强趋势', '趋势末端', '筑底', '见顶', '高位震荡', '低位震荡', '中继整理', '突破失败'];
+const TURN_TAGS = ['下跌转涨', '上涨转跌', '震荡转趋势', '趋势转震荡', '无转换'];
+function sessionCapital(){
+  const n = +TR.initCapital;
+  return Number.isFinite(n) && n > 0 ? n : INIT_CAPITAL;
+}
+function readStartCapital(){
+  const el = document.getElementById('trCapitalInput');
+  const n = el ? +el.value : INIT_CAPITAL;
+  return Math.min(100000000, Math.max(100, Number.isFinite(n) && n > 0 ? n : INIT_CAPITAL));
+}
+function formatDuration(ms){
+  const s = Math.max(0, Math.round((+ms || 0) / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h) return `${h}小时${m}分${sec}秒`;
+  if (m) return `${m}分${String(sec).padStart(2, '0')}秒`;
+  return `${sec}秒`;
+}
+function sessionPnlPct(s){
+  const cap = +s?.capital || INIT_CAPITAL;
+  return cap ? (+s.pnl || 0) / cap * 100 : 0;
+}
+function flushPracticeClock(){
+  if (!TR.active || TR.revealed || !TR.clockAt) return;
+  TR.durationMs = (TR.durationMs || 0) + Math.max(0, Date.now() - TR.clockAt);
+  TR.clockAt = Date.now();
+}
+function pausePracticeClock(){
+  flushPracticeClock();
+  TR.clockAt = 0;
+}
+function resumePracticeClock(){
+  if (!trLocked()) return;
+  TR.clockAt = Date.now();
+}
 const HISTORY_KEY = 'kpractice_history_v2';
 const SNAPSHOT_KEY = 'kpractice_active_v1';
 const PREFS_KEY = 'kpractice_preferences_v1';
@@ -160,7 +197,8 @@ function writePracticeSnapshot(value){
 }
 function savePractice(){
   if (!trLocked() || replayT == null || !TR.startTs) return;
-  writePracticeSnapshot({ version: 1, tr: { ...TR }, replayT, positions, posSeq,
+  flushPracticeClock();
+  writePracticeSnapshot({ version: 1, tr: { ...TR, clockAt: 0 }, replayT, positions, posSeq,
     account: acctLoad(), drawings: drawRecs, range: chart?.timeScale().getVisibleLogicalRange() });
 }
 function clearPracticeSnapshot(){
@@ -176,7 +214,7 @@ function updateResumeCard(){
 }
 
 function savePreferences(){
-  const ids = ['trSymSel', 'trMktSel', 'trTfSel', 'trStepsInput', 'maPeriods'];
+  const ids = ['trSymSel', 'trMktSel', 'trTfSel', 'trStepsInput', 'trCapitalInput', 'maPeriods'];
   const prefs = { theme: themeKey(), values: Object.fromEntries(ids.map(id => [id, document.getElementById(id).value])),
     overlays: Object.fromEntries([...document.querySelectorAll('[data-ov]')].map(b => [b.dataset.ov, b.classList.contains('active')])) };
   if (!lsSet(PREFS_KEY, prefs)) toast('偏好设置未能保存');
@@ -257,6 +295,17 @@ function groupTradesByPid(recs){
 function sessionQualityText(q){
   return q === 'good' ? '好题' : q === 'poor' ? '没意义' : '';
 }
+function sessionSignals(s){
+  return Array.isArray(s?.signals) ? s.signals : [];
+}
+function maxDrawdown(curve){
+  let peak = 0, max = 0;
+  for (const point of curve || []){
+    peak = Math.max(peak, point.eq);
+    if (peak > 0) max = Math.max(max, (peak - point.eq) / peak * 100);
+  }
+  return max;
+}
 
 function csvEscape(v){
   return '"' + String(v ?? '').replace(/"/g, '""') + '"';
@@ -324,7 +373,8 @@ function buildTrainerCsv(){
   const sessions = tsLoad();
   const cols = [
     'session_id','session_time','symbol','tf','start_time','steps','condition','quality',
-    'session_capital','session_end_capital','session_pnl',
+    'structure','turn','duration_sec','signals','signal_notes',
+    'session_capital','session_end_capital','session_pnl','session_pnl_pct','session_max_dd',
     'pid','kind','lot','side','leverage','capital','time','price',
     'entry_time','entry','exit_time','exit_price',
     'stop','tp','adds','ratio','partial','pnl_u','pnl_pct_capital','result',
@@ -339,7 +389,13 @@ function buildTrainerCsv(){
       symbol: s.sym, tf: s.tf,
       start_time: s.startTs != null ? fmtTs(s.startTs, s.tf) : '',
       steps: s.steps, condition: s.cond, quality: sessionQualityText(s.quality),
+      structure: s.structure || '', turn: s.turn || '',
+      duration_sec: Math.round((+s.durationMs || 0) / 1000),
+      signals: csvJoin(sessionSignals(s).map(g => g.t != null ? fmtTs(g.t, s.tf) : '')),
+      signal_notes: csvJoin(sessionSignals(s).map(g => g.note || '')),
       session_capital: s.capital, session_end_capital: s.endCapital, session_pnl: s.pnl,
+      session_pnl_pct: sessionPnlPct(s).toFixed(2),
+      session_max_dd: maxDrawdown(s.curve).toFixed(2),
     };
     const trades = groupTradesByPid(s.trades || []);
     if (!trades.length){
