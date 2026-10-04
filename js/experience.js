@@ -181,6 +181,7 @@ function focusReviewTrade(index){
   const banner = document.getElementById('trainerBanner');
   banner.innerHTML = `<b>第 ${reviewIndex + 1} 笔 · ${escapeHtml(trade.side)} · ${(+trade.pnl_u).toFixed(2)}U</b>
     <span>${escapeHtml(trade.entry_time)} → ${escapeHtml(trade.exit_time)}</span>
+    <span>R ${formatR(trade.r_mult)} · 最大 ${formatR(trade.max_r)}</span>
     <span>入场：${escapeHtml(trade.logic || '未记录')}</span>
     <span>出场：${escapeHtml(trade.exit_logic || trade.exit_reason || '未记录')}</span>`;
 }

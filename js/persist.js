@@ -284,6 +284,10 @@ function groupTradesByPid(recs){
     prev.ratio = 1;
     prev.result = prev.pnl_u > 0 ? '盈' : (prev.pnl_u < 0 ? '亏' : '平');
     prev.pnl_pct_capital = +(prev.pnl_u / Math.max(prev.capital, 1e-9) * 100).toFixed(2);
+    const asNum = v => (v === '' || v == null || !Number.isFinite(+v) ? null : +v);
+    const maxR = [asNum(prev.max_r), asNum(r.max_r)].filter(v => v != null);
+    if (maxR.length) prev.max_r = +Math.max(...maxR).toFixed(2);
+    if (asNum(r.r_mult) != null) prev.r_mult = +(+r.r_mult).toFixed(2);
   }
   for (const t of map.values()){
     if (t.entries && t.entries.length)
@@ -346,7 +350,7 @@ function csvRowsForTrade(head, t){
     entry_time: t.entry_time, entry: t.entry,
     exit_time: t.exit_time, exit_price: t.exit_price,
     stop: t.stop, tp: t.tp, adds: addCount, ratio: t.ratio, partial: t.partial,
-    pnl_u: t.pnl_u, pnl_pct_capital: t.pnl_pct_capital, result: t.result,
+    pnl_u: t.pnl_u, pnl_pct_capital: t.pnl_pct_capital, r_mult: t.r_mult, max_r: t.max_r, result: t.result,
     exit_reason: t.exit_reason, entry_logic: t.logic, exit_logic: t.exit_logic,
     cash_capital: cash, working_capital: working || cash,
     add_times: csvJoin(adds.map(e => e.t)),
@@ -362,7 +366,7 @@ function csvRowsForTrade(head, t){
     entry_time: e.t, entry: e.price,
     exit_time: t.exit_time, exit_price: t.exit_price,
     stop: t.stop, tp: t.tp, adds: addCount, ratio: '', partial: '',
-    pnl_u: '', pnl_pct_capital: '', result: '',
+    pnl_u: '', pnl_pct_capital: '', r_mult: '', max_r: '', result: '',
     exit_reason: '', entry_logic: e.logic, exit_logic: '',
     cash_capital: '', working_capital: '',
     add_times: '', add_prices: '', add_capitals: '', add_logics: '',
@@ -377,7 +381,7 @@ function buildTrainerCsv(){
     'session_capital','session_end_capital','session_pnl','session_pnl_pct','session_max_dd',
     'pid','kind','lot','side','leverage','capital','time','price',
     'entry_time','entry','exit_time','exit_price',
-    'stop','tp','adds','ratio','partial','pnl_u','pnl_pct_capital','result',
+    'stop','tp','adds','ratio','partial','pnl_u','pnl_pct_capital','r_mult','max_r','result',
     'exit_reason','entry_logic','exit_logic',
     'cash_capital','working_capital','add_times','add_prices','add_capitals','add_logics',
   ];

@@ -465,7 +465,7 @@ function renderTrainerSessions(){
       <button class="btn" data-review="-1" type="button">回看本局 K 线</button>
       ${trades.map((trade, i) => `<button class="btn review-trade" data-review="${i}" type="button">
       <span>第 ${i + 1} 笔 · ${escapeHtml(trade.side)} · ${escapeHtml(trade.entry_time)} → ${escapeHtml(trade.exit_time)}</span>
-      <span>${escapeHtml(trade.entry)} → ${escapeHtml(trade.exit_price)} · ${(+trade.pnl_u).toFixed(2)}U</span>
+      <span>${escapeHtml(trade.entry)} → ${escapeHtml(trade.exit_price)} · ${(+trade.pnl_u).toFixed(2)}U · ${formatR(trade.r_mult)} · 最大 ${formatR(trade.max_r)}</span>
       <span>入场：${escapeHtml(trade.logic || '未记录')} · 出场：${escapeHtml(trade.exit_logic || trade.exit_reason || '未记录')}</span></button>`).join('')}
       </div></details>`;
   }).join('');

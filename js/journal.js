@@ -72,6 +72,57 @@ function formatLev(x){
   if (x < 0.005) return '0x';
   return `${x.toFixed(x >= 10 ? 1 : 2)}x`;
 }
+function ensureRBasis(pos){
+  if (!pos || pos.rStop != null) return;
+  const stop = pos.stop;
+  if (stop == null) return;
+  const entry = pos.entries?.[0]?.price ?? posAvgEntry(pos);
+  const dir = pos.side === '多' ? 1 : -1;
+  if (!(dir * (entry - stop) > 0)) return;
+  pos.rEntry = entry;
+  pos.rStop = stop;
+}
+function rMultiple(pos, price){
+  if (!pos || price == null || !Number.isFinite(+price)) return null;
+  ensureRBasis(pos);
+  const entry = pos.rEntry;
+  const stop = pos.rStop;
+  if (entry == null || stop == null) return null;
+  const dir = pos.side === '多' ? 1 : -1;
+  const risk = dir * (entry - stop);
+  if (!(risk > 0)) return null;
+  return dir * (price - entry) / risk;
+}
+function formatR(x){
+  if (x == null || x === '' || !Number.isFinite(+x)) return '—';
+  const n = +x;
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}R`;
+}
+function favorablePx(pos, bar){
+  if (!bar) return null;
+  const entryT = pos.entries?.[0]?.t;
+  if (entryT != null && bar.time === entryT) return bar.close;
+  return pos.side === '多' ? bar.high : bar.low;
+}
+function touchPosR(pos, bar){
+  if (!pos || !bar) return;
+  ensureRBasis(pos);
+  const now = rMultiple(pos, bar.close);
+  const fav = rMultiple(pos, favorablePx(pos, bar));
+  if (now != null) pos.curR = now;
+  const peak = fav != null ? fav : now;
+  if (peak != null) pos.maxR = pos.maxR == null ? peak : Math.max(pos.maxR, peak);
+}
+function snapshotR(pos, exitPrice){
+  const bar = curBar();
+  if (bar) touchPosR(pos, bar);
+  const r = rMultiple(pos, exitPrice);
+  if (r != null) pos.maxR = pos.maxR == null ? r : Math.max(pos.maxR, r);
+  return {
+    r_mult: r == null ? '' : +r.toFixed(2),
+    max_r: pos.maxR == null ? '' : +pos.maxR.toFixed(2),
+  };
+}
 
 const POS_COLORS = ['#f5a623', '#4a90d9', '#b45cd6', '#2fbf8f', '#e05c78', '#8a9299'];
 const posColor = pos => POS_COLORS[(pos.id - 1) % POS_COLORS.length];
@@ -187,6 +238,7 @@ function renderJournal(){
     html += `<div class="pos-card" data-pid="${pos.id}">
       <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))}<br>
       <span style="opacity:.85">止损 ${pos.stop == null ? '—' : fmt(pos.stop)} · 止盈 ${pos.tp == null ? '—' : fmt(pos.tp)}</span><br>
+      <span data-r="${pos.id}">${pos.stop == null && pos.rStop == null ? 'R —（未设止损）' : `R ${formatR(ok && bar ? rMultiple(pos, bar.close) : pos.curR)} · 最大 ${formatR(pos.maxR)}`}</span><br>
       <span style="opacity:.85">持仓金额 ${pv.toFixed(1)}U${eq > 1e-9 ? ` · ${ (pv / eq).toFixed(2)}x` : ''}</span><br>
       <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
       ${pos.entries.map((e, i) =>
@@ -274,11 +326,19 @@ function updateLivePnl(){
       const b = addBudget(pos);
       bd.innerHTML = `浮盈 <b style="color:${b.u >= 0 ? 'var(--up)' : 'var(--down)'}">${b.u >= 0 ? '+' : ''}${b.u.toFixed(2)}U</b> · 已加 ${b.used.toFixed(2)}U · 还可加 <b>${b.avail.toFixed(2)}U</b>`;
     }
+    touchPosR(pos, bar);
+    const rEl = document.querySelector(`[data-r="${pos.id}"]`);
+    if (rEl){
+      rEl.textContent = pos.rStop == null && pos.stop == null
+        ? 'R —（未设止损）'
+        : `R ${formatR(pos.curR)} · 最大 ${formatR(pos.maxR)}`;
+    }
   }
 }
 
 function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
   const capClosed = posCashCapital(pos) * r;
+  const rs = snapshotR(pos, exitPrice);
   return {
     symbol: DATA.meta.symbol, tf: activeTF,
     mode: TR.active && !TR.revealed ? 'trainer' : 'replay',
@@ -293,6 +353,7 @@ function makeRec(pos, r, exitPrice, exitTs, pnl, exitLogic, reason){
     entries: pos.entries.map(e => ({ t: fmtTimeReal(e.t), price: e.price, capital: e.capital, leverage: e.leverage, logic: e.logic })),
     exit_logic: exitLogic,
     pnl_u: +pnl.toFixed(2), pnl_pct_capital: +(pnl / Math.max(capClosed, 1e-9) * 100).toFixed(2),
+    r_mult: rs.r_mult, max_r: rs.max_r,
     result: pnl > 0 ? '盈' : (pnl < 0 ? '亏' : '平'),
     exit_reason: reason + (r < 1 ? ` ${Math.round(r * 100)}%` : ''),
   };
@@ -385,6 +446,9 @@ function applyPosLevels(pos, stop, tp){
   if (err) return err;
   pos.stop = stop;
   pos.tp = tp;
+  ensureRBasis(pos);
+  const bar = curBar();
+  if (bar) touchPosR(pos, bar);
   return '';
 }
 
@@ -394,6 +458,7 @@ function checkStopAndLiquidate(){
   if (!bar || !mine.length) return;
   let changed = false;
   for (const pos of mine){
+    touchPosR(pos, bar);
     const cash = posCashCapital(pos);
     const hitStop = pos.stop != null &&
       ((pos.side === '多' && bar.low <= pos.stop) ||
@@ -486,7 +551,7 @@ function setupJournal(){
     const lvlErr = levelsError(side, entry, stop, tp);
     if (lvlErr){ alert(lvlErr); return; }
     acctAdj(-margin);
-    positions.push({
+    const pos = {
       id: posSeq++,
       sym: currentSym, tf: activeTF,
       side,
@@ -499,7 +564,10 @@ function setupJournal(){
         leverage: Math.min(125, +document.getElementById('jLeverage').value || 10),
         logic,
       }],
-    });
+    };
+    ensureRBasis(pos);
+    touchPosR(pos, bar);
+    positions.push(pos);
     clearLogic(document.getElementById('jLogicPicks'));
     renderJournal();
     syncMarginInput();
