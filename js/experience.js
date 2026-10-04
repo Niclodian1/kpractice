@@ -11,9 +11,13 @@ function renderPositionSummary(){
   const pnl = bar ? positions.reduce((n, p) => n + pnlOf(p, bar.close), 0) : 0;
   const long = positions.filter(p => p.side === '多').length;
   const short = positions.length - long;
+  const eq = acctEquity();
+  const notional = posGrossNotional();
+  const lev = effectiveLeverage();
   el.innerHTML = `<span>${positions.length ? `多 ${long} / 空 ${short}` : '暂无持仓'}</span>
     <span style="color:${pnl >= 0 ? 'var(--up)' : 'var(--down)'}">浮盈 ${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}U</span>
-    <span>净值 ${acctEquity().toFixed(1)}U</span>`;
+    <span>净值 ${eq.toFixed(1)}U</span>
+    <span data-sum-lev>杠杆 ${formatLev(lev)}${notional ? ` · ${notional.toFixed(0)}U` : ''}</span>`;
 }
 
 function restoreDrawings(records){

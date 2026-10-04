@@ -55,6 +55,23 @@ const acctEquity = () => {
   const floatPnl = bar ? cur.reduce((a, p) => a + pnlOf(p, bar.close), 0) : 0;
   return acctBal() + cashUsed + floatPnl;
 };
+function posGrossNotional(price){
+  const px = price ?? curBar()?.close;
+  if (px == null) return 0;
+  return positions.filter(p => posLayoutOk(p)).reduce((n, p) => n + posValue(p, px), 0);
+}
+function effectiveLeverage(price){
+  const notional = posGrossNotional(price);
+  if (notional <= 0) return 0;
+  const eq = acctEquity();
+  if (!(eq > 1e-9)) return Infinity;
+  return notional / eq;
+}
+function formatLev(x){
+  if (!Number.isFinite(x)) return '∞';
+  if (x < 0.005) return '0x';
+  return `${x.toFixed(x >= 10 ? 1 : 2)}x`;
+}
 
 const POS_COLORS = ['#f5a623', '#4a90d9', '#b45cd6', '#2fbf8f', '#e05c78', '#8a9299'];
 const posColor = pos => POS_COLORS[(pos.id - 1) % POS_COLORS.length];
@@ -153,6 +170,8 @@ function renderJournal(){
     可用 <b data-abal>${acctBal().toFixed(2)}U</b> · 占用 <span data-aused>${cashUsed.toFixed(0)}</span>U${addUsed ? ` · 浮盈加仓 ${addUsed.toFixed(0)}U` : ''}<br>
     浮动 <span data-fsum style="font-weight:700;color:${floatSum >= 0 ? 'var(--up)' : 'var(--down)'}">${floatSum >= 0 ? '+' : ''}${floatSum.toFixed(2)}U</span>
     · 净值 <b data-aeq style="color:${eqCol}">${eq.toFixed(2)}U</b>
+    · 持仓 <span data-notional>${posGrossNotional(bar?.close).toFixed(0)}U</span>
+    · 杠杆 <b data-lev>${formatLev(effectiveLeverage(bar?.close))}</b>
     ${positions.length ? '<button class="btn" data-act="close-all" type="button" style="margin-top:6px;width:100%;">一键全平</button>' : ''}
     <div data-curve>${equitySparkSvg(TR.curve)}</div>
   </div>`;
@@ -168,7 +187,7 @@ function renderJournal(){
     html += `<div class="pos-card" data-pid="${pos.id}">
       <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))}<br>
       <span style="opacity:.85">止损 ${pos.stop == null ? '—' : fmt(pos.stop)} · 止盈 ${pos.tp == null ? '—' : fmt(pos.tp)}</span><br>
-      <span style="opacity:.85">持仓金额 ${pv.toFixed(1)} U</span><br>
+      <span style="opacity:.85">持仓金额 ${pv.toFixed(1)}U${eq > 1e-9 ? ` · ${ (pv / eq).toFixed(2)}x` : ''}</span><br>
       <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
       ${pos.entries.map((e, i) =>
         `<span style="opacity:.72">${i + 1}) ${fmt(e.price)} · ${e.leverage}x · ${e.capital}U · ${fmtLogic(e.logic)}</span>`
@@ -234,6 +253,12 @@ function updateLivePnl(){
       const cap0 = sessionCapital();
       eqEl.style.color = eq > cap0 ? 'var(--up)' : (eq < cap0 ? 'var(--down)' : '');
     }
+    const notEl = document.querySelector('[data-notional]');
+    const levEl = document.querySelector('[data-lev]');
+    const notional = posGrossNotional(bar.close);
+    const lev = eq > 1e-9 ? notional / eq : (notional > 0 ? Infinity : 0);
+    if (notEl) notEl.textContent = notional.toFixed(0) + 'U';
+    if (levEl) levEl.textContent = formatLev(lev);
   }
   for (const pos of positions){
     if (!posLayoutOk(pos)) continue;
