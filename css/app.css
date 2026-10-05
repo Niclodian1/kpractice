@@ -297,6 +297,21 @@ input, select, textarea {
   font-weight: 600;
 }
 
+/* ---- 两级入场标签: 一级分类 → 二级选项 ---- */
+.lt-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.lt-cat { display: inline-flex; align-items: center; gap: 4px; }
+.lt-cat.open { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.lt-cat .lt-req { font-size: 9px; font-weight: 400; color: var(--down); border: 1px solid var(--down); border-radius: 3px; padding: 0 3px; }
+.lt-count {
+  display: none; min-width: 16px; height: 16px; line-height: 16px; text-align: center;
+  border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 10px; padding: 0 3px;
+}
+.lt-count.on { display: inline-block; }
+.lt-panel { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px dashed var(--border); border-radius: 8px; }
+.lt-panel[hidden] { display: none !important; }
+.lt-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lt-glabel { font-size: 11px; color: var(--muted); width: 100%; }
+
 #trainerBanner {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 8;
   display: none; flex-direction: column; gap: 4px;

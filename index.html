@@ -188,14 +188,58 @@
           <label>止盈价<input id="jTake" type="number" inputmode="decimal" placeholder="可选"></label>
         </div>
         <div class="logic-picks" id="jLogicPicks">
-          <div class="logic-label">开单逻辑（可多选，可不选）</div>
-          <div class="chips">
-            <button type="button" class="chip" data-logic="MACD背离">MACD背离</button>
-            <button type="button" class="chip" data-logic="均线突破">均线突破</button>
-            <button type="button" class="chip" data-logic="均线回踩">均线回踩</button>
-            <button type="button" class="chip" data-logic="裸K">裸K</button>
-            <button type="button" class="chip" data-logic="趋势线突破">趋势线突破</button>
-            <button type="button" class="chip" data-logic="成交量放大">成交量放大</button>
+          <div class="logic-label">开单逻辑（点开一级标签选二级；市场环境/入场信号必填）</div>
+          <div class="lt-cats">
+            <button type="button" class="chip lt-cat" data-cat="market">市场环境<span class="lt-req">必填</span><span class="lt-count" data-count="market">0</span></button>
+            <button type="button" class="chip lt-cat" data-cat="entry">入场信号<span class="lt-req">必填</span><span class="lt-count" data-count="entry">0</span></button>
+            <button type="button" class="chip lt-cat" data-cat="momentum">动能<span class="lt-count" data-count="momentum">0</span></button>
+            <button type="button" class="chip lt-cat" data-cat="candle">裸K<span class="lt-count" data-count="candle">0</span></button>
+            <button type="button" class="chip lt-cat" data-cat="pattern">形态<span class="lt-count" data-count="pattern">0</span></button>
+          </div>
+          <div class="lt-panel" data-panel="market" hidden>
+            <div class="lt-group"><span class="lt-glabel">MA120方向</span>
+              <button type="button" class="chip" data-cat="market" data-group="ma120dir" data-val="MA120向上">MA120向上</button>
+              <button type="button" class="chip" data-cat="market" data-group="ma120dir" data-val="MA120向下">MA120向下</button>
+              <button type="button" class="chip" data-cat="market" data-group="ma120dir" data-val="MA120走平">MA120走平</button>
+            </div>
+            <div class="lt-group"><span class="lt-glabel">价格位置</span>
+              <button type="button" class="chip" data-cat="market" data-group="pricepos" data-val="价格在MA120以上">价格在MA120以上</button>
+              <button type="button" class="chip" data-cat="market" data-group="pricepos" data-val="价格在MA120以下">价格在MA120以下</button>
+            </div>
+          </div>
+          <div class="lt-panel" data-panel="entry" hidden>
+            <div class="lt-group"><span class="lt-glabel">MA突破</span>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_break" data-val="突破MA20">突破MA20</button>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_break" data-val="突破MA60">突破MA60</button>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_break" data-val="突破MA120">突破MA120</button>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_break" data-val="MA20与MA60双均线突破">MA20与MA60双均线突破</button>
+            </div>
+            <div class="lt-group"><span class="lt-glabel">MA回踩</span>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_pullback" data-val="回踩MA20">回踩MA20</button>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_pullback" data-val="回踩MA60">回踩MA60</button>
+              <button type="button" class="chip" data-cat="entry" data-group="ma_pullback" data-val="回踩MA120">回踩MA120</button>
+            </div>
+          </div>
+          <div class="lt-panel" data-panel="momentum" hidden>
+            <div class="lt-group">
+              <button type="button" class="chip" data-cat="momentum" data-val="MACD背离">MACD背离</button>
+              <button type="button" class="chip" data-cat="momentum" data-val="中枢背离">中枢背离</button>
+              <button type="button" class="chip" data-cat="momentum" data-val="盘整背离">盘整背离</button>
+            </div>
+          </div>
+          <div class="lt-panel" data-panel="candle" hidden>
+            <div class="lt-group">
+              <button type="button" class="chip" data-cat="candle" data-val="Pinbar">Pinbar</button>
+              <button type="button" class="chip" data-cat="candle" data-val="吞没">吞没</button>
+              <button type="button" class="chip" data-cat="candle" data-val="假突破">假突破</button>
+            </div>
+          </div>
+          <div class="lt-panel" data-panel="pattern" hidden>
+            <div class="lt-group">
+              <button type="button" class="chip" data-cat="pattern" data-val="三角形中继">三角形中继</button>
+              <button type="button" class="chip" data-cat="pattern" data-val="下降趋势线">下降趋势线</button>
+              <button type="button" class="chip" data-cat="pattern" data-val="蓄势">蓄势</button>
+            </div>
           </div>
         </div>
         <button class="btn primary" id="jOpen" type="button">开单（当前K线）</button>

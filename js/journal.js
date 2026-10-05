@@ -154,13 +154,46 @@ function practiceEntries(){
 
 const fmtLogic = (s, n=16) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; };
 
+// ---- 两级入场标签(市场环境/入场信号必填) ----
+function ltSelected(cat, group){
+  const sel = group
+    ? `#jLogicPicks .chip.active[data-cat="${cat}"][data-group="${group}"]`
+    : `#jLogicPicks .chip.active[data-cat="${cat}"][data-val]`;
+  return [...document.querySelectorAll(sel)].map(b => b.dataset.val);
+}
+function ltMissing(){
+  const miss = [];
+  if (!ltSelected('market', 'ma120dir').length) miss.push('MA120方向');
+  if (!ltSelected('market', 'pricepos').length) miss.push('价格位置');
+  if (!ltSelected('entry').length) miss.push('入场信号');
+  return miss;
+}
+function updateLtCounts(){
+  for (const cat of ['market', 'entry', 'momentum', 'candle', 'pattern']){
+    const n = ltSelected(cat).length;
+    const el = document.querySelector(`#jLogicPicks [data-count="${cat}"]`);
+    if (el){ el.textContent = n; el.classList.toggle('on', n > 0); }
+  }
+}
 function selectedLogic(root){
   if (!root) return '';
-  return [...root.querySelectorAll('.chip.active')].map(b => b.dataset.logic).join('、');
+  const parts = [];
+  const market = ltSelected('market');
+  if (market.length) parts.push('市场: ' + market.join('·'));
+  const entry = ltSelected('entry');
+  if (entry.length) parts.push('入场: ' + entry.join('、'));
+  for (const [cat, name] of [['momentum', '动能'], ['candle', '裸K'], ['pattern', '形态']]){
+    const v = ltSelected(cat);
+    if (v.length) parts.push(name + ': ' + v.join('、'));
+  }
+  return parts.join(' | ');
 }
 function clearLogic(root){
   if (!root) return;
   root.querySelectorAll('.chip.active').forEach(b => b.classList.remove('active'));
+  root.querySelectorAll('.lt-cat.open').forEach(b => b.classList.remove('open'));
+  root.querySelectorAll('.lt-panel').forEach(p => { p.hidden = true; });
+  updateLtCounts();
 }
 function syncMarginInput(){
   const el = document.getElementById('jCapital');
@@ -528,12 +561,31 @@ function refreshPositionLines(){
 
 function setupJournal(){
   document.getElementById('jLogicPicks').addEventListener('click', e => {
+    const catBtn = e.target.closest('.lt-cat');
+    if (catBtn){
+      const cat = catBtn.dataset.cat;
+      const panel = document.querySelector(`#jLogicPicks .lt-panel[data-panel="${cat}"]`);
+      const wasOpen = panel && !panel.hidden;
+      document.querySelectorAll('#jLogicPicks .lt-panel').forEach(p => { p.hidden = true; });
+      document.querySelectorAll('#jLogicPicks .lt-cat').forEach(b => b.classList.remove('open'));
+      if (panel && !wasOpen){ panel.hidden = false; catBtn.classList.add('open'); }
+      return;
+    }
     const chip = e.target.closest('.chip');
-    if (!chip) return;
-    chip.classList.toggle('active');
+    if (!chip || !chip.dataset.val) return;
+    if (chip.dataset.group === 'ma120dir' || chip.dataset.group === 'pricepos'){
+      const was = chip.classList.contains('active');   // 市场环境两组: 同组单选, 再点取消
+      document.querySelectorAll(`#jLogicPicks .chip[data-group="${chip.dataset.group}"]`)
+        .forEach(x => x.classList.toggle('active', x === chip ? !was : false));
+    } else {
+      chip.classList.toggle('active');
+    }
+    updateLtCounts();
   });
   document.getElementById('jOpen').addEventListener('click', () => {
     if (!inReplay()){ alert('请先开始练习'); return; }
+    const miss = ltMissing();
+    if (miss.length){ alert(`市场环境/入场信号必填——还缺: ${miss.join('、')}。请点开对应一级标签选择二级标签`); return; }
     const logic = selectedLogic(document.getElementById('jLogicPicks'));
     const bar = curBar();
     if (!bar) return;
