@@ -169,7 +169,7 @@ function ltMissing(){
   return miss;
 }
 function updateLtCounts(){
-  for (const cat of ['market', 'entry', 'momentum', 'candle', 'pattern']){
+  for (const cat of ['market', 'entry', 'pattern']){
     const n = ltSelected(cat).length;
     const el = document.querySelector(`#jLogicPicks [data-count="${cat}"]`);
     if (el){ el.textContent = n; el.classList.toggle('on', n > 0); }
@@ -180,12 +180,14 @@ function selectedLogic(root){
   const parts = [];
   const market = ltSelected('market');
   if (market.length) parts.push('市场: ' + market.join('·'));
-  const entry = ltSelected('entry');
+  const entry = ltSelected('entry', 'ma_break').concat(ltSelected('entry', 'ma_pullback'));
   if (entry.length) parts.push('入场: ' + entry.join('、'));
-  for (const [cat, name] of [['momentum', '动能'], ['candle', '裸K'], ['pattern', '形态']]){
-    const v = ltSelected(cat);
-    if (v.length) parts.push(name + ': ' + v.join('、'));
-  }
+  const mom = ltSelected('entry', 'momentum');
+  if (mom.length) parts.push('动能: ' + mom.join('、'));
+  const cd = ltSelected('entry', 'candle');
+  if (cd.length) parts.push('裸K: ' + cd.join('、'));
+  const pattern = ltSelected('pattern');
+  if (pattern.length) parts.push('形态: ' + pattern.join('、'));
   return parts.join(' | ');
 }
 function clearLogic(root){

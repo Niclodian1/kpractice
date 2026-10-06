@@ -192,8 +192,6 @@
           <div class="lt-cats">
             <button type="button" class="chip lt-cat" data-cat="market">市场环境<span class="lt-req">必填</span><span class="lt-count" data-count="market">0</span></button>
             <button type="button" class="chip lt-cat" data-cat="entry">入场信号<span class="lt-req">必填</span><span class="lt-count" data-count="entry">0</span></button>
-            <button type="button" class="chip lt-cat" data-cat="momentum">动能<span class="lt-count" data-count="momentum">0</span></button>
-            <button type="button" class="chip lt-cat" data-cat="candle">裸K<span class="lt-count" data-count="candle">0</span></button>
             <button type="button" class="chip lt-cat" data-cat="pattern">形态<span class="lt-count" data-count="pattern">0</span></button>
           </div>
           <div class="lt-panel" data-panel="market" hidden>
@@ -219,19 +217,15 @@
               <button type="button" class="chip" data-cat="entry" data-group="ma_pullback" data-val="回踩MA60">回踩MA60</button>
               <button type="button" class="chip" data-cat="entry" data-group="ma_pullback" data-val="回踩MA120">回踩MA120</button>
             </div>
-          </div>
-          <div class="lt-panel" data-panel="momentum" hidden>
-            <div class="lt-group">
-              <button type="button" class="chip" data-cat="momentum" data-val="MACD背离">MACD背离</button>
-              <button type="button" class="chip" data-cat="momentum" data-val="中枢背离">中枢背离</button>
-              <button type="button" class="chip" data-cat="momentum" data-val="盘整背离">盘整背离</button>
+            <div class="lt-group"><span class="lt-glabel">动能</span>
+              <button type="button" class="chip" data-cat="entry" data-group="momentum" data-val="MACD背离">MACD背离</button>
+              <button type="button" class="chip" data-cat="entry" data-group="momentum" data-val="中枢背离">中枢背离</button>
+              <button type="button" class="chip" data-cat="entry" data-group="momentum" data-val="盘整背离">盘整背离</button>
             </div>
-          </div>
-          <div class="lt-panel" data-panel="candle" hidden>
-            <div class="lt-group">
-              <button type="button" class="chip" data-cat="candle" data-val="Pinbar">Pinbar</button>
-              <button type="button" class="chip" data-cat="candle" data-val="吞没">吞没</button>
-              <button type="button" class="chip" data-cat="candle" data-val="假突破">假突破</button>
+            <div class="lt-group"><span class="lt-glabel">裸K</span>
+              <button type="button" class="chip" data-cat="entry" data-group="candle" data-val="Pinbar">Pinbar</button>
+              <button type="button" class="chip" data-cat="entry" data-group="candle" data-val="吞没">吞没</button>
+              <button type="button" class="chip" data-cat="entry" data-group="candle" data-val="假突破">假突破</button>
             </div>
           </div>
           <div class="lt-panel" data-panel="pattern" hidden>
