@@ -237,6 +237,30 @@ function equitySparkSvg(curve, w, h, cap0){
   </svg>`;
 }
 
+// ---- 乖离档位行(持仓卡): 止盈/回补参考; 全品种通用, 绝对阈值按 BTC 日线校准 ----
+const BIAS_TIP = '乖离档位: MA20乖离=收盘对MA20的偏离%。'
+  + '一档 ≥+20% 或滚动分位≥P97 → 减1/3(MA60乖离≥+30%可减半); '
+  + '二档 ≥+30% 或≥P99 → 再减1/3; 恐慌回补 ≤-20% 或≤P2 → 减仓现金分批买回; 尾仓 收盘破MA20离场。'
+  + '分位=当前乖离在该品种自身约1年窗口中的位置(低波动品种以分位档为准); 空头反向参考。';
+function biasRowInner(pos, b){
+  b = b !== undefined ? b : biasSnapshot();
+  if (!b) return '';
+  const c = BIAS_CFG;
+  const sgn = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  const hit2 = b.b20 >= c.l2 || (b.p20 != null && b.p20 >= c.p2);
+  const hit1 = !hit2 && (b.b20 >= c.l1 || (b.p20 != null && b.p20 >= c.p1));
+  const panic = b.b20 <= c.rb || (b.p20 != null && b.p20 <= c.pr);
+  const pTxt = b.p20 != null ? `P${Math.round(b.p20 * 100)}` : '—';
+  let st;
+  if (hit2) st = '<b style="color:var(--down)">⚡ 二档触发</b> → 再减 1/3, 尾仓破MA20离场';
+  else if (hit1) st = `<b style="color:#ff9800">⚡ 一档触发</b> → 减 1/3${b.b60 >= c.b60Confirm ? ' (MA60≥30%, 可减半)' : ''}`;
+  else if (panic) st = '<b style="color:#2962ff">❄ 恐慌回补区</b> → 减仓现金分批买回';
+  else st = `距一档 ${(c.l1 - b.b20).toFixed(1)}% · 距回补区 ${(b.b20 - c.rb).toFixed(1)}%`;
+  const trend = b.b20 < 0 ? ' · <span style="color:var(--down)">已破MA20</span>' : '';
+  const side = pos && pos.side === '空' ? ' <span style="opacity:.55">(空头反向参考)</span>' : '';
+  return `乖离 MA20 <b>${sgn(b.b20)}%</b> (${pTxt}) · MA60 ${sgn(b.b60)}% · ${st}${trend}${side}`;
+}
+
 function renderJournal(){
   const box = document.getElementById('jPositions');
   if (!box) return;
@@ -261,6 +285,7 @@ function renderJournal(){
     ${positions.length ? '<button class="btn" data-act="close-all" type="button" style="margin-top:6px;width:100%;">一键全平</button>' : ''}
     <div data-curve>${equitySparkSvg(TR.curve)}</div>
   </div>`;
+  const biasSnap = positions.length ? biasSnapshot() : null;   // 每步只算一次, 多持仓复用
   for (const pos of positions){
     const ok = posLayoutOk(pos);
     const cap = posCapital(pos);
@@ -274,6 +299,7 @@ function renderJournal(){
       <b>#${pos.id} ${pos.side}</b>${addN > 0 ? ` · 加仓×${addN}` : ''} · 均价 ${fmt(posAvgEntry(pos))}<br>
       <span style="opacity:.85">止损 ${pos.stop == null ? '—' : fmt(pos.stop)} · 止盈 ${pos.tp == null ? '—' : fmt(pos.tp)}</span><br>
       <span data-r="${pos.id}">${pos.stop == null && pos.rStop == null ? 'R —（未设止损）' : `R ${formatR(ok && bar ? rMultiple(pos, bar.close) : pos.curR)} · 最大 ${formatR(pos.maxR)}`}</span><br>
+      ${ok ? `<span data-bias="${pos.id}" title="${BIAS_TIP}" style="font-size:11px;display:block;margin-top:2px;color:var(--ink-2);">${biasRowInner(pos, biasSnap)}</span>` : ''}
       <span style="opacity:.85">持仓金额 ${pv.toFixed(1)}U${eq > 1e-9 ? ` · ${ (pv / eq).toFixed(2)}x` : ''}</span><br>
       <span data-float="${pos.id}" style="font-size:15px;font-weight:700;color:${col}">浮动 ${u >= 0 ? '+' : ''}${u.toFixed(1)}U (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</span><br>
       ${pos.entries.map((e, i) =>
@@ -347,6 +373,7 @@ function updateLivePnl(){
     if (notEl) notEl.textContent = notional.toFixed(0) + 'U';
     if (levEl) levEl.textContent = formatLev(lev);
   }
+  const biasSnap = positions.length ? biasSnapshot() : null;   // 每步只算一次, 多持仓复用
   for (const pos of positions){
     if (!posLayoutOk(pos)) continue;
     const u = pnlOf(pos, bar.close);
@@ -368,6 +395,9 @@ function updateLivePnl(){
         ? 'R —（未设止损）'
         : `R ${formatR(pos.curR)} · 最大 ${formatR(pos.maxR)}`;
     }
+    // 乖离档位随K线实时刷新
+    const biasEl = document.querySelector(`[data-bias="${pos.id}"]`);
+    if (biasEl) biasEl.innerHTML = biasRowInner(pos, biasSnap);
   }
 }
 

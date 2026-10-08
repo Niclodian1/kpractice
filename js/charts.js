@@ -103,6 +103,38 @@ function sma(closes, period){
   }
   return out;
 }
+
+// ---- 乖离档位: 收盘对 MA20/MA60 的乖离率 + 滚动分位(全品种/全周期通用) ----
+// 口径: 原始K线收盘, 按当前练习窗口截断(无未来信息); 分位=当前b20在该品种
+// 自身过去约1年(按周期折算根数)内的位置, 低波动品种以分位档为准。
+function biasSnapshot(){
+  const lv = L();
+  if (!lv) return null;
+  const { hi } = displayRange();
+  const n = hi;
+  if (n < 60) return null;
+  const c = i => lv.candles[i][4];
+  let s20 = 0, s60 = 0;
+  for (let i = n - 60; i < n; i++){
+    s60 += c(i);
+    if (i >= n - 20) s20 += c(i);
+  }
+  const ma20 = s20 / 20, ma60 = s60 / 60;
+  const last = c(n - 1);
+  const b20 = (last / ma20 - 1) * 100;
+  const b60 = (last / ma60 - 1) * 100;
+  const lb = Math.min(n, BIAS_CFG.lookback[activeTF] || 365);
+  let sum = 0, cnt = 0, le = 0;
+  for (let i = n - lb; i < n; i++){
+    sum += c(i);
+    if (i - 20 >= n - lb) sum -= c(i - 20);
+    if (i - (n - lb) >= 19){
+      cnt++;
+      if ((c(i) / (sum / 20) - 1) * 100 <= b20) le++;
+    }
+  }
+  return { close: last, ma20, ma60, b20, b60, p20: cnt ? le / cnt : null, n };
+}
 function rebuildMA(){
   if (!chart) return;
   const periods = parseMaPeriods();
